@@ -15,15 +15,27 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)  # For PointCloud2 messages
+find_package(pcl_conversions REQUIRED)  # For PCL conversions
+find_package(PCL REQUIRED)  # For PCD loading
 
-# Declare a C++ executable
+# Declare the first C++ executable (drone control)
 add_executable(template_drone_control_node src/template_drone_control_node.cpp)
-
-# Specify libraries to link a library or executable target against
 ament_target_dependencies(template_drone_control_node rclcpp geometry_msgs mavros_msgs)
 
-# Install the executable
-install(TARGETS template_drone_control_node DESTINATION lib/${PROJECT_NAME})
+# Declare the second C++ executable (PCD loader)
+add_executable(pcd_loader_node src/pcd_loader.cpp)
+ament_target_dependencies(pcd_loader_node rclcpp sensor_msgs pcl_conversions)
+
+# Link PCL libraries
+target_link_libraries(pcd_loader_node ${PCL_LIBRARIES})
+
+# Install the executables
+install(TARGETS
+  template_drone_control_node
+  pcd_loader_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Ament package
 ament_package()

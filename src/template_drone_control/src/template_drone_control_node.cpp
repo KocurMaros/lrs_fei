@@ -52,7 +52,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "Sending position command");
         // TODO: Implement position controller and mission commands here
     }
-
+    
 private:
 
     void local_pos_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
