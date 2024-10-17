@@ -27,13 +27,17 @@ ament_target_dependencies(template_drone_control_node rclcpp geometry_msgs mavro
 add_executable(pcd_loader_node src/pcd_loader.cpp)
 ament_target_dependencies(pcd_loader_node rclcpp sensor_msgs pcl_conversions)
 
+add_executable(flood_fill_node src/flood_fill_node.cpp)
+ament_target_dependencies(flood_fill_node rclcpp mavros_msgs geometry_msgs sensor_msgs pcl_conversions)
+
 # Link PCL libraries
-target_link_libraries(pcd_loader_node ${PCL_LIBRARIES})
+target_link_libraries(flood_fill_node ${PCL_LIBRARIES})
 
 # Install the executables
 install(TARGETS
   template_drone_control_node
   pcd_loader_node
+  flood_fill_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
