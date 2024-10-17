@@ -41,11 +41,14 @@ public:
         // Start the navigation process
         current_waypoint_ = 0;
         navigate_to_waypoint();
+        
     }
 
 private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_pub_;
     std::vector<Waypoint> waypoints_;
+    std::vector<geometry_msgs::msg::Point> trajectory_; // To store the trajectory
+
     size_t current_waypoint_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;  // Point cloud data
 
@@ -83,7 +86,7 @@ private:
             new_point.y += delta;  // move in Y direction
             if (!check_for_collision(new_point, current_point)) break;
         }   
-         RCLCPP_INFO(this->get_logger(), "New point [%f, %f, %f]", new_point.x, new_point.y, new_point.z);
+        RCLCPP_INFO(this->get_logger(), "New point [%f, %f, %f]", new_point.x, new_point.y, new_point.z);
         current_point = new_point;  // update current point to rerouted position
     }
 
@@ -106,6 +109,7 @@ private:
     void navigate_to_waypoint() {
         if (current_waypoint_ >= waypoints_.size()) {
             RCLCPP_INFO(this->get_logger(), "All waypoints reached.");
+            print_trajectory();
             return;
         }
 
@@ -124,7 +128,10 @@ private:
         // Check for collision between the current position and the target waypoint
         if (current_waypoint_ > 0 && check_for_collision(current_point, target_point)) {
             reroute(current_point, cloud_);
+            trajectory_.push_back(current_point);
             RCLCPP_ERROR(this->get_logger(), "Collision detected in path, cannot proceed to waypoint %zu", current_waypoint_);
+        }else{
+            trajectory_.push_back(current_point);
         }
 
         // Publish target position
@@ -138,6 +145,7 @@ private:
         if (reached_waypoint(target)) {
             RCLCPP_INFO(this->get_logger(), "Reached waypoint %zu: [%f, %f, %f]", current_waypoint_, target.x, target.y, target.z);
             execute_task(target.task);
+            
             current_waypoint_++;
         }
 
@@ -169,6 +177,14 @@ private:
         } else if (task == "landtakeoff") {
             // Implement landing and takeoff
             RCLCPP_INFO(this->get_logger(), "Executing task: Land and Takeoff");
+        }
+    }
+    void print_trajectory()
+    {
+        std::cout << "Trajectory:" << std::endl;
+        for (const auto &waypoint : trajectory_)
+        {
+            std::cout << "X: " << waypoint.x << ", Y: " << waypoint.y << ", Z: " << waypoint.z << std::endl;
         }
     }
 };

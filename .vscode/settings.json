@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "functional": "cpp",
+        "__functional_03": "cpp",
+        "target": "cpp",
+        "chrono": "cpp",
+        "string": "cpp",
+        "filesystem": "cpp",
+        "stdexcept": "cpp"
+    }
+}
