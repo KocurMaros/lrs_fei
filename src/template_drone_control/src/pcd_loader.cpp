@@ -11,7 +11,7 @@ public:
     {
         publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("map_topic", 10);
         timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(500), std::bind(&MapPublisher::publishMap, this));
+        std::chrono::milliseconds(500), std::bind(&MapPublisher::publishMap, this));
     }
 
 private:

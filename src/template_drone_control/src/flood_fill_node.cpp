@@ -2,11 +2,16 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <mavros_msgs/srv/command_bool.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
+#include <mavros_msgs/msg/state.hpp>
+
 #include <mavros_msgs/srv/command_tol.hpp>
 #include <vector>
 #include <cmath>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+// #include <visualization_msgs/msg/marker.hpp>
+#include <pcl_conversions/pcl_conversions.h>  // For converting PCL point clouds to ROS messages
 
 struct Waypoint {
     double x;
@@ -23,10 +28,13 @@ public:
     {
         // Initialize subscriptions, publishers, and clients (e.g., MAVROS services)
         local_pos_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("mavros/setpoint_position/local", 10);
-
-        // Load the point cloud data from a PCD file
+        publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("map_topic", 10);
+        publisher_trajectory_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("trajectory_topic", 10);
         load_pcd_file("src/LRS-FEI/maps/FEI_LRS_PCD/map.pcd");
-
+        timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(500), std::bind(&FloodFillDroneControl::publishMap, this));
+        // Load the point cloud data from a PCD file
+        // publish_point_cloud();
         // Define waypoints with tasks
         waypoints_ = {
             {13.60, 1.50, 1.00, 0.5, "takeoff"},
@@ -41,10 +49,18 @@ public:
         // Start the navigation process
         current_waypoint_ = 0;
         navigate_to_waypoint();
-        
+        // publish_trajectory();
+
     }
 
 private:
+    // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_pub_;
+    // rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr trajectory_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_trajectory_;
+
+    rclcpp::TimerBase::SharedPtr timer_;
+
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_pub_;
     std::vector<Waypoint> waypoints_;
     std::vector<geometry_msgs::msg::Point> trajectory_; // To store the trajectory
@@ -53,6 +69,9 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_;  // Point cloud data
 
     void load_pcd_file(const std::string &pcd_file) {
+        // point_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("drone/point_cloud", 10);
+        // trajectory_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("drone/trajectory", 10);
+
         cloud_ = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
         if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_file, *cloud_) == -1) {
             RCLCPP_ERROR(this->get_logger(), "Couldn't read PCD file: %s", pcd_file.c_str());
@@ -110,6 +129,7 @@ private:
         if (current_waypoint_ >= waypoints_.size()) {
             RCLCPP_INFO(this->get_logger(), "All waypoints reached.");
             print_trajectory();
+            publisTrajectory();
             return;
         }
 
@@ -128,12 +148,9 @@ private:
         // Check for collision between the current position and the target waypoint
         if (current_waypoint_ > 0 && check_for_collision(current_point, target_point)) {
             reroute(current_point, cloud_);
-            trajectory_.push_back(current_point);
             RCLCPP_ERROR(this->get_logger(), "Collision detected in path, cannot proceed to waypoint %zu", current_waypoint_);
-        }else{
-            trajectory_.push_back(current_point);
         }
-
+        trajectory_.push_back(current_point);
         // Publish target position
         geometry_msgs::msg::PoseStamped pose;
         pose.pose.position.x = target.x;
@@ -186,6 +203,30 @@ private:
         {
             std::cout << "X: " << waypoint.x << ", Y: " << waypoint.y << ", Z: " << waypoint.z << std::endl;
         }
+    }
+    void publishMap()
+    {
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        pcl::toROSMsg(*cloud_, cloud_msg);
+        cloud_msg.header.frame_id = "map";
+        publisher_->publish(cloud_msg);
+    }
+    void publisTrajectory(){
+        sensor_msgs::msg::PointCloud2 trajectory_msg;
+        pcl::PointCloud<pcl::PointXYZRGB> trajectory_cloud;
+        trajectory_cloud.points.resize(trajectory_.size());
+        for (size_t i = 0; i < trajectory_.size(); i++)
+        {
+            trajectory_cloud.points[i].x = trajectory_[i].x;
+            trajectory_cloud.points[i].y = trajectory_[i].y;
+            trajectory_cloud.points[i].z = trajectory_[i].z;
+            trajectory_cloud.points[i].r = 255;  // Red color
+            trajectory_cloud.points[i].g = 0;    // Green color
+            trajectory_cloud.points[i].b = 0;    // Blue color
+        }
+        pcl::toROSMsg(trajectory_cloud, trajectory_msg);
+        trajectory_msg.header.frame_id = "map";
+        publisher_trajectory_->publish(trajectory_msg);
     }
 };
 
