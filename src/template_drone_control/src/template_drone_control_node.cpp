@@ -7,7 +7,7 @@
 
 #include "load_pcd_node.hpp"
 #include "drone_navigation.hpp"
-
+#include "pgm_map_loader.hpp"
 using namespace std::chrono_literals;
 
 class TemplateDroneControl : public rclcpp::Node    
@@ -15,13 +15,13 @@ class TemplateDroneControl : public rclcpp::Node
 public:
     TemplateDroneControl() : Node("template_drone_control_node")
     {
-        LoadPCDNode load_pcd_node;
-        DroneNavigator drone_node;
-        auto waypoints = load_pcd_node.loadWaypoints("src/LRS-FEI/mission_2_simple.csv");
-        std::cout << "Loaded " << waypoints.size() << " waypoints" << std::endl;
-        drone_node.calculatePath(waypoints);
-        // Set up ROS publishers, subscribers and service clients
-        
+        PGMMapLoader map_loader;
+        std::vector<std::string> yaml_map_names = map_loader.generateMapFilenames();
+        for (const auto &yaml_map_name : yaml_map_names)
+        {
+            std::cout << "Loading map: " << yaml_map_name << std::endl;
+        }
+        map_loader.loadMap(yaml_map_names[0]);
         state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
             "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
         local_pos_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("mavros/setpoint_position/local", 10);
@@ -97,11 +97,11 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto load_pcd_node = std::make_shared<LoadPCDNode>();
+    // auto load_pcd_node = std::make_shared<LoadPCDNode>();
     auto drone_control_node = std::make_shared<TemplateDroneControl>();
     rclcpp::executors::SingleThreadedExecutor exec;
     exec.add_node(drone_control_node);
-    exec.add_node(load_pcd_node);
+    // exec.add_node(load_pcd_node);
     exec.spin();
 
     // rclcpp::spin(std::make_shared<TemplateDroneControl>());

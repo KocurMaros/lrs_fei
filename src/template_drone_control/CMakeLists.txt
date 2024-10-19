@@ -7,16 +7,18 @@ find_package(sensor_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
-
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS io)
+find_package(OpenCV REQUIRED)
+find_package(YAML-CPP REQUIRED)
 
 add_executable(template_drone_control_node
   src/template_drone_control_node.cpp
   src/drone_navigation.cpp
-  src/load_pcd_node.cpp)
+  src/load_pcd_node.cpp
+  src/pgm_map_loader.cpp)
 
 ament_target_dependencies(template_drone_control_node
   rclcpp
@@ -27,7 +29,12 @@ ament_target_dependencies(template_drone_control_node
   nav2_msgs
   rclcpp_action
   pcl_conversions
+  OpenCV
+  YAML-CPP
   PCL)
+
+target_link_libraries(template_drone_control_node
+  ${YAML_CPP_LIBRARIES})
 
 install(TARGETS
   template_drone_control_node
