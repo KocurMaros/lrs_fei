@@ -57,7 +57,7 @@ public:
             RCLCPP_ERROR(this->get_logger(), "Failed to change mode to GUIDED.");
             return;
         }
-        
+
         // Arm the drone
         auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
         arm_request->value = true;
@@ -67,6 +67,42 @@ public:
             if (arm_result.get()->success)
             {
                 RCLCPP_INFO(this->get_logger(), "Drone armed successfully.");
+                
+                // Wait for acknowledgment
+                while (!current_state_.armed)
+                {
+                    rclcpp::spin_some(this->get_node_base_interface());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+
+                // Takeoff command
+                auto takeoff_request = std::make_shared<mavros_msgs::srv::CommandTOL::Request>();
+                takeoff_request->altitude = 10.0;  // Set desired altitude for takeoff
+                auto takeoff_result = takeoff_client_->async_send_request(takeoff_request);
+                if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), takeoff_result) == rclcpp::FutureReturnCode::SUCCESS)
+                {
+                    if (takeoff_result.get()->success)
+                    {
+                        RCLCPP_INFO(this->get_logger(), "Takeoff command sent successfully, awaiting acknowledgment...");
+                        // Wait for takeoff acknowledgment
+                        while (true)
+                        {
+                            // Use current_state_ to check if the drone has taken off
+                            // if (/* Condition to check if the drone is in the air */) // Implement this condition based on your use case
+                            // {
+                            //     RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
+                            //     break;
+                            // }
+                            rclcpp::spin_some(this->get_node_base_interface());
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                    }
+                    else
+                    {
+                        RCLCPP_ERROR(this->get_logger(), "Failed to send takeoff command.");
+                        return;
+                    }
+                }
             }
             else
             {
@@ -75,32 +111,22 @@ public:
             }
         }
 
-        // Takeoff
-        auto takeoff_request = std::make_shared<mavros_msgs::srv::CommandTOL::Request>();
-        takeoff_request->altitude = 10.0;  // Set desired altitude for takeoff
-        auto takeoff_result = takeoff_client_->async_send_request(takeoff_request);
-        if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), takeoff_result) == rclcpp::FutureReturnCode::SUCCESS)
-        {
-            if (takeoff_result.get()->success)
-            {
-                RCLCPP_INFO(this->get_logger(), "Takeoff successful.");
-            }
-            else
-            {
-                RCLCPP_ERROR(this->get_logger(), "Failed to take off.");
-                return;
-            }
-        }
-
         // Implement position control: Sending a position command after takeoff
         geometry_msgs::msg::PoseStamped target_pose;
-        target_pose.pose.position.x = 10.0; // Set target position
-        target_pose.pose.position.y = 10.0;
-        target_pose.pose.position.z = 10.0; // Altitude
-        local_pos_pub_->publish(target_pose);
-
-        RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-                    target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+        target_pose.pose.position.x = 0.0; // Set target position
+        target_pose.pose.position.y = 0.0;
+        target_pose.pose.position.z = 0.5; // Altitude
+        // local_pos_pub_->publish(target_pose);
+        rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+        while (rclcpp::ok())
+        {
+            local_pos_pub_->publish(target_pose);
+            RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
+                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+            rate.sleep();
+        }
+        // RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
+        //             target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
     }
 
 private:

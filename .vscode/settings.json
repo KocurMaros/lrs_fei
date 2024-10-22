@@ -73,6 +73,9 @@
         "valarray": "cpp",
         "variant": "cpp",
         "__nullptr": "cpp",
-        "__tree": "cpp"
+        "__tree": "cpp",
+        "__locale": "cpp",
+        "__functional_base": "cpp",
+        "locale": "cpp"
     }
 }
