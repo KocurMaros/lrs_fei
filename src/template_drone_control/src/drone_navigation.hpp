@@ -1,20 +1,13 @@
-#include <rclcpp/rclcpp.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <nav2_msgs/action/navigate_to_pose.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
+#ifndef DRONE_NAVIGATION_HPP
+#define DRONE_NAVIGATION_HPP
 
-#include "load_pcd_node.hpp"
-class DroneNavigator : public rclcpp::Node
-{
-public:
-    DroneNavigator();
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <nav_msgs/msg/path.hpp>
 
-    void calculatePath(const std::vector<Waypoint> &waypoints);
+// Declare the function so it can be used in other files
+nav_msgs::msg::Path generatePath(const nav_msgs::msg::OccupancyGrid& map, 
+                                 const geometry_msgs::msg::Pose& start, 
+                                 const geometry_msgs::msg::Pose& goal);
 
-private:
-    void checkCollision(const Waypoint &wp);
-    void sendGoal(const geometry_msgs::msg::PoseStamped &goal_pose);
-
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_pub_;
-    rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr action_client_;
-};
+#endif // DRONE_NAVIGATION_HPP

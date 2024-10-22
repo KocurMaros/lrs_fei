@@ -1,110 +1,125 @@
-#include <rclcpp/rclcpp.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <mavros_msgs/msg/state.hpp>
-#include <mavros_msgs/srv/command_bool.hpp>
-#include <mavros_msgs/srv/set_mode.hpp>
-#include <mavros_msgs/srv/command_tol.hpp>
+#include "rclcpp/rclcpp.hpp"
+#include "mavros_msgs/srv/set_mode.hpp"
+#include "mavros_msgs/srv/command_bool.hpp"
+#include "mavros_msgs/srv/command_tol.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "mavros_msgs/msg/state.hpp"
+#include <chrono>
 
-#include "load_pcd_node.hpp"
-#include "drone_navigation.hpp"
-#include "pgm_map_loader.hpp"
 using namespace std::chrono_literals;
 
-class TemplateDroneControl : public rclcpp::Node    
+class TemplateDroneControl : public rclcpp::Node, public std::enable_shared_from_this<TemplateDroneControl>
 {
 public:
     TemplateDroneControl() : Node("template_drone_control_node")
     {
-        PGMMapLoader map_loader;
-        std::vector<std::string> yaml_map_names = map_loader.generateMapFilenames();
-        for (const auto &yaml_map_name : yaml_map_names)
-        {
-            std::cout << "Loading map: " << yaml_map_name << std::endl;
-        }
-        map_loader.loadMap(yaml_map_names[0]);
-        state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
-            "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
         local_pos_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("mavros/setpoint_position/local", 10);
+
         arming_client_ = this->create_client<mavros_msgs::srv::CommandBool>("mavros/cmd/arming");
         set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>("mavros/set_mode");
         takeoff_client_ = this->create_client<mavros_msgs::srv::CommandTOL>("mavros/cmd/takeoff");
-        rmw_qos_profile_t custom_qos = rmw_qos_profile_default;
-        custom_qos.depth = 1;
-        custom_qos.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
-        auto qos = rclcpp::QoS(rclcpp::QoSInitialization(custom_qos.history, 1), custom_qos);
+
+        // Adjust QoS settings for the subscription
+        rclcpp::QoS qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
+        qos.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+
         local_pos_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
                 "/mavros/local_position/pose", qos, std::bind(&TemplateDroneControl::local_pos_cb, this, std::placeholders::_1));
 
-        // Wait for MAVROS SITL connection
-        while (rclcpp::ok() && !current_state_.connected)
-        {
-            rclcpp::spin_some(this->get_node_base_interface());
-            std::this_thread::sleep_for(100ms);
-        }
+    }
 
-        mavros_msgs::srv::SetMode::Request guided_set_mode_req;
-        guided_set_mode_req.custom_mode = "GUIDED";
+    void initialize()
+    {
+        std::cout << "Drone Control Initialized." << std::endl;
+        set_guided_mode();
+        arm_drone();
+        takeoff(0.25);
+    }
+
+private:
+    void set_guided_mode()
+    {
+        auto request = std::make_shared<mavros_msgs::srv::SetMode::Request>();
+        request->custom_mode = "GUIDED";
+
         while (!set_mode_client_->wait_for_service(1s))
         {
             if (!rclcpp::ok())
             {
-                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the set_mode service. Exiting.");
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for set_mode service. Exiting.");
                 return;
             }
             RCLCPP_INFO(this->get_logger(), "Waiting for set_mode service...");
         }
-        auto result = set_mode_client_->async_send_request(std::make_shared<mavros_msgs::srv::SetMode::Request>(guided_set_mode_req));
 
-        // TODO: Test if drone state really changed to GUIDED
-
-        // TODO: Arm and Take Off
-        RCLCPP_INFO(this->get_logger(), "Sending position command");
-        // TODO: Implement position controller and mission commands here
+        auto result = set_mode_client_->async_send_request(request);
+        rclcpp::spin_until_future_complete(std::enable_shared_from_this<TemplateDroneControl>::shared_from_this(), result);
+        RCLCPP_INFO(this->get_logger(), "GUIDED mode set.");
     }
-    
-private:
+
+    void arm_drone()
+    {
+        auto request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+        request->value = true;
+
+        while (!arming_client_->wait_for_service(1s))
+        {
+            if (!rclcpp::ok())
+            {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for arming service. Exiting.");
+                return;
+            }
+            RCLCPP_INFO(this->get_logger(), "Waiting for arming service...");
+        }
+
+        auto result = arming_client_->async_send_request(request);
+        rclcpp::spin_until_future_complete(std::enable_shared_from_this<TemplateDroneControl>::shared_from_this(), result);
+        RCLCPP_INFO(this->get_logger(), "Drone armed.");
+    }
+
+    void takeoff(double altitude)
+    {
+        auto request = std::make_shared<mavros_msgs::srv::CommandTOL::Request>();
+        request->altitude = altitude;
+
+        while (!takeoff_client_->wait_for_service(1s))
+        {
+            if (!rclcpp::ok())
+            {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for takeoff service. Exiting.");
+                return;
+            }
+            RCLCPP_INFO(this->get_logger(), "Waiting for takeoff service...");
+        }
+
+        auto result = takeoff_client_->async_send_request(request);
+        rclcpp::spin_until_future_complete(std::enable_shared_from_this<TemplateDroneControl>::shared_from_this(), result);
+        RCLCPP_INFO(this->get_logger(), "Takeoff initiated.");
+    }
 
     void local_pos_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         geometry_msgs::msg::PoseStamped current_local_pos_ = *msg;
-
-        // To obtain the position of the drone use this data fields withing the message, please note, that this is the local position of the drone in the NED frame so it is different to the map frame
-        // current_local_pos_.pose.position.x
-        // current_local_pos_.pose.position.y
-        // current_local_pos_.pose.position.z
-        // you can do the same for orientation, but you will not need it for this seminar
-
-
-        RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-    }
-    void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
-    {
-        current_state_ = *msg;
-        RCLCPP_INFO(this->get_logger(), "Current State: %s", current_state_.mode.c_str());
+        RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f", 
+                    current_local_pos_.pose.position.x, 
+                    current_local_pos_.pose.position.y, 
+                    current_local_pos_.pose.position.z);
     }
 
-    rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr state_sub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_pub_;
-    rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr arming_client_;
     rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
+    rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr arming_client_;
     rclcpp::Client<mavros_msgs::srv::CommandTOL>::SharedPtr takeoff_client_;
-
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_sub_;
-
     mavros_msgs::msg::State current_state_;
 };
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    // auto load_pcd_node = std::make_shared<LoadPCDNode>();
-    auto drone_control_node = std::make_shared<TemplateDroneControl>();
-    rclcpp::executors::SingleThreadedExecutor exec;
-    exec.add_node(drone_control_node);
-    // exec.add_node(load_pcd_node);
-    exec.spin();
-
-    // rclcpp::spin(std::make_shared<TemplateDroneControl>());
+    auto node = std::make_shared<TemplateDroneControl>();
+    node->initialize(); // Call initialize after the object is fully managed by a shared_ptr
+    rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
 }

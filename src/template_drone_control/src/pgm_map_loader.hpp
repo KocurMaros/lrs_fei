@@ -13,7 +13,9 @@ public:
     PGMMapLoader();
     void loadMap(const std::string &pgm_file);
     std::vector<std::string> generateMapFilenames();
+    nav_msgs::msg::OccupancyGrid getOccupancyGrid() { return map; }
 private:
+    nav_msgs::msg::OccupancyGrid map;
     void loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map);
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_publisher_;
 };
