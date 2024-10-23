@@ -175,25 +175,58 @@
             }
         }
         void change_altitude(double altitude){
-            // Takeoff command
-            geometry_msgs::msg::PoseStamped target_pose;
-            target_pose.pose.position.x = 0.0; // Set target position
-            target_pose.pose.position.y = 0.0;
-            target_pose.pose.position.z = altitude; // Altitude
-            // local_pos_pub_->publish(target_pose);
-            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
-            RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
-            while (rclcpp::ok())
+            // Arm the drone
+            auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+            arm_request->value = true;
+            auto arm_result = arming_client_->async_send_request(arm_request);
+            if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), arm_result) == rclcpp::FutureReturnCode::SUCCESS)
             {
-                local_pos_pub_->publish(target_pose);
-                if ((current_local_pos_.pose.position.z * 0.95 > current_local_pos_.pose.position.z) && (current_local_pos_.pose.position.z * 1.05 < current_local_pos_.pose.position.z) ) // Implement this condition based on your use case
+                if (arm_result.get()->success)
                 {
-                    RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
-                    break;
+                    RCLCPP_INFO(this->get_logger(), "Drone armed successfully.");
+                    
+                    // Wait for acknowledgment
+                    while (!current_state_.armed)
+                    {
+                        rclcpp::spin_some(this->get_node_base_interface());
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+
+                    // Takeoff command
+                    auto takeoff_request = std::make_shared<mavros_msgs::srv::CommandTOL::Request>();
+                    takeoff_request->altitude = altitude;  // Set desired altitude for takeoff
+                    auto takeoff_result = takeoff_client_->async_send_request(takeoff_request);
+                    if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), takeoff_result) == rclcpp::FutureReturnCode::SUCCESS)
+                    {
+                        if (takeoff_result.get()->success)
+                        {
+                            RCLCPP_INFO(this->get_logger(), "Takeoff command sent successfully, awaiting acknowledgment...");
+                            // Wait for takeoff acknowledgment
+                            while (true)
+                            {
+                                if ((current_local_pos_.pose.position.z * 0.95 > current_local_pos_.pose.position.z) && (current_local_pos_.pose.position.z * 1.05 < current_local_pos_.pose.position.z) ) // Implement this condition based on your use case
+                                {
+                                    RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
+                                    break;
+                                }
+                                rclcpp::spin_some(this->get_node_base_interface());
+                                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                            }
+                        }
+                        else
+                        {
+                            RCLCPP_ERROR(this->get_logger(), "Failed to send takeoff command.");
+                            return;
+                        }
+                    }
                 }
-                // Use current_state_ to check if the drone has taken off
+                else
+                {
+                    RCLCPP_ERROR(this->get_logger(), "Failed to arm the drone.");
+                    return;
+                }
             }
+            // Takeoff command
             std::cout << "Takeoff acknowledged, drone is airborne." << std::endl;
         }
         rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr state_sub_;
