@@ -35,10 +35,36 @@ public:
             std::this_thread::sleep_for(100ms);
         }
 
-        // Set mode to GUIDED
-        mavros_msgs::srv::SetMode::Request guided_set_mode_req;
-        guided_set_mode_req.custom_mode = "GUIDED";
-        while (!set_mode_client_->wait_for_service(1s))
+        
+        set_mode("GUIDED");
+        set_arm();
+        std::this_thread::sleep_for(500ms);
+        change_altitude(0.50);
+        
+        
+    }
+
+private:
+    geometry_msgs::msg::PoseStamped current_local_pos_;
+    void local_pos_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+    {
+        current_local_pos_ = *msg;
+        // Get and log the current local position of the drone
+        RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+                    current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+    }
+
+    void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
+    {
+        current_state_ = *msg;
+        RCLCPP_INFO(this->get_logger(), "Current State: %s", current_state_.mode.c_str());
+    }
+    void set_arm(){
+        // Arm the drone
+        auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+        arm_request->value = true;
+
+        while (!arming_client_->wait_for_service(1s))
         {
             if (!rclcpp::ok())
             {
@@ -47,20 +73,7 @@ public:
             }
             RCLCPP_INFO(this->get_logger(), "Waiting for set_mode service...");
         }
-        auto result = set_mode_client_->async_send_request(std::make_shared<mavros_msgs::srv::SetMode::Request>(guided_set_mode_req));
-        if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result) == rclcpp::FutureReturnCode::SUCCESS)
-        {
-            RCLCPP_INFO(this->get_logger(), "Drone mode changed to GUIDED.");
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(), "Failed to change mode to GUIDED.");
-            return;
-        }
 
-        // Arm the drone
-        auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
-        arm_request->value = true;
         auto arm_result = arming_client_->async_send_request(arm_request);
         if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), arm_result) == rclcpp::FutureReturnCode::SUCCESS)
         {
@@ -74,35 +87,6 @@ public:
                     rclcpp::spin_some(this->get_node_base_interface());
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
-
-                // Takeoff command
-                auto takeoff_request = std::make_shared<mavros_msgs::srv::CommandTOL::Request>();
-                takeoff_request->altitude = 10.0;  // Set desired altitude for takeoff
-                auto takeoff_result = takeoff_client_->async_send_request(takeoff_request);
-                if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), takeoff_result) == rclcpp::FutureReturnCode::SUCCESS)
-                {
-                    if (takeoff_result.get()->success)
-                    {
-                        RCLCPP_INFO(this->get_logger(), "Takeoff command sent successfully, awaiting acknowledgment...");
-                        // Wait for takeoff acknowledgment
-                        while (true)
-                        {
-                            // Use current_state_ to check if the drone has taken off
-                            // if (/* Condition to check if the drone is in the air */) // Implement this condition based on your use case
-                            // {
-                            //     RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
-                            //     break;
-                            // }
-                            rclcpp::spin_some(this->get_node_base_interface());
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        }
-                    }
-                    else
-                    {
-                        RCLCPP_ERROR(this->get_logger(), "Failed to send takeoff command.");
-                        return;
-                    }
-                }
             }
             else
             {
@@ -110,12 +94,37 @@ public:
                 return;
             }
         }
-
-        // Implement position control: Sending a position command after takeoff
+    }
+    void set_mode(char *mode){
+        // Set mode to GUIDED
+        mavros_msgs::srv::SetMode::Request guided_set_mode_req;
+        guided_set_mode_req.custom_mode = mode;
+        while (!set_mode_client_->wait_for_service(1s))
+        {
+            if (!rclcpp::ok())
+            {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the set_mode service. Exiting.");
+                return;
+            }
+            RCLCPP_INFO(this->get_logger(), "Waiting for set_mode service...");
+        }
+        auto result = set_mode_client_->async_send_request(std::make_shared<mavros_msgs::srv::SetMode::Request>(guided_set_mode_req));
+        if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result) == rclcpp::FutureReturnCode::SUCCESS)
+        {
+            RCLCPP_INFO(this->get_logger(), "Drone mode changed to %s", mode);
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to change mode to %s", mode);
+            return;
+        }
+    }
+    void change_altitude(double altitude){
+        // Takeoff command
         geometry_msgs::msg::PoseStamped target_pose;
         target_pose.pose.position.x = 0.0; // Set target position
         target_pose.pose.position.y = 0.0;
-        target_pose.pose.position.z = 0.5; // Altitude
+        target_pose.pose.position.z = altitude; // Altitude
         // local_pos_pub_->publish(target_pose);
         rclcpp::Rate rate(10); // Set the frequency to 10 Hz
         while (rclcpp::ok())
@@ -124,27 +133,15 @@ public:
             RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
                         target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
             rate.sleep();
+            if ((current_local_pos_.pose.position.z * 0.95 > current_local_pos_.pose.position.z) && (current_local_pos_.pose.position.z * 1.05 < current_local_pos_.pose.position.z) ) // Implement this condition based on your use case
+            {
+                RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
+                break;
+            }
+            // Use current_state_ to check if the drone has taken off
         }
-        // RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-        //             target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+        std::cout << "Takeoff acknowledged, drone is airborne." << std::endl;
     }
-
-private:
-    void local_pos_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
-    {
-        geometry_msgs::msg::PoseStamped current_local_pos_ = *msg;
-
-        // Get and log the current local position of the drone
-        RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                    current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-    }
-
-    void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
-    {
-        current_state_ = *msg;
-        RCLCPP_INFO(this->get_logger(), "Current State: %s", current_state_.mode.c_str());
-    }
-
     rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr state_sub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_pub_;
     rclcpp::Client<mavros_msgs::srv::CommandBool>::SharedPtr arming_client_;
