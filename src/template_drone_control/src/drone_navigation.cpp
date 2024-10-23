@@ -5,6 +5,7 @@
 #include <nav_msgs/msg/path.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include "rclcpp/time.hpp"
+#include <iostream>
 
 struct Node
 {
@@ -38,6 +39,8 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
     int start_x, int start_y,
     int goal_x, int goal_y)
 {
+    std::cout << "Start: " << start_x << ", " << start_y << std::endl;
+    std::cout << "Goal: " << goal_x << ", " << goal_y << std::endl;
     std::priority_queue<std::pair<double, Node*>, std::vector<std::pair<double, Node*>>, std::greater<>> open_list;
     std::vector<std::vector<bool>> visited(map.info.width, std::vector<bool>(map.info.height, false));
 
@@ -111,6 +114,15 @@ nav_msgs::msg::Path generatePath(
 
     int goal_x = static_cast<int>((goal_position.position.x - map.info.origin.position.x) / map.info.resolution);
     int goal_y = static_cast<int>((goal_position.position.y - map.info.origin.position.y) / map.info.resolution);
+
+
+    std::cout << "Drone position " << drone_position.position.x << ", " << drone_position.position.y << std::endl;
+    std::cout << "Goal position " << goal_position.position.x << ", " << goal_position.position.y << std::endl;
+    std::cout << "Resolution " << map.info.resolution << std::endl;
+    std::cout << "Width " << map.info.width << std::endl;
+    std::cout << "Height " << map.info.height << std::endl;
+    std::cout << "Start: " << start_x << ", " << start_y << std::endl;
+    std::cout << "Goal: " << goal_x << ", " << goal_y << std::endl;
 
     // Generate path using A* algorithm
     std::vector<geometry_msgs::msg::PoseStamped> path_points = aStarPathfinding(map, start_x, start_y, goal_x, goal_y);

@@ -49,35 +49,31 @@
             set_mode("GUIDED");
             set_arm();
             std::this_thread::sleep_for(500ms);
-            // change_altitude(0.75);
+            change_altitude(0.75);
             
-            geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = 1.0;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = 0.0;  // Set the y-coordinate of your waypoint
-            goal_pose.position.z = 0.75; // Desired altitude
+            // geometry_msgs::msg::Pose goal_pose;
+            // goal_pose.position.x = 1.0;  // Set the x-coordinate of your waypoint
+            // goal_pose.position.y = 0.0;  // Set the y-coordinate of your waypoint
+            // goal_pose.position.z = 0.75; // Desired altitude
 
-            // Get drone's current position
-            geometry_msgs::msg::Pose drone_position;
-            drone_position.position = current_local_pos_.pose.position;
+            // // Get drone's current position
+            // geometry_msgs::msg::Pose drone_position;
+            // drone_position.position = current_local_pos_.pose.position;
 
-            // Use your path generator
-            map_loader.loadMap(map_names[2]);
-            nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
-            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            // // Use your path generator
+            // map_loader.loadMap(map_names[2]);
+            // nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
             // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
             //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            for(auto pose_stamped : path.poses){
-                RCLCPP_INFO(this->get_logger(), "Path: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-            }
-            // Publish the path
-            for (const auto& pose_stamped : path.poses) {
-                local_pos_pub_->publish(pose_stamped);  // Publish each point along the path
-                // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                //         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-                rclcpp::Rate(10ms).sleep();  // Adjust the rate to ensure smooth movement
-            }
+            // nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            // // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+            // //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            // for(auto pose_stamped : path.poses){
+            //     RCLCPP_INFO(this->get_logger(), "Path: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
+            // }
+            // set_arm();
+            // go_to_point(path.poses.back().pose.position.x, path.poses.back().pose.position.y, 0.75);
+            // go_to_point(0.1, 0.1, 0.25);
 
         }   
 
@@ -87,7 +83,8 @@
         {
             current_local_pos_ = *msg;
             // Get and log the current local position of the drone
-            
+            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
         }
 
         void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
@@ -155,6 +152,28 @@
                 return;
             }
         }
+        void go_to_point(double x, double y, double z){
+            // Go to a specific point
+            geometry_msgs::msg::PoseStamped target_pose;
+            target_pose.pose.position.x = x; // Set target position
+            target_pose.pose.position.y = y;
+            target_pose.pose.position.z = z; // Altitude
+            RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
+                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+            RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
+                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+            while (rclcpp::ok())
+            {
+                local_pos_pub_->publish(target_pose);
+                if ((current_local_pos_.pose.position.x * 0.95 > current_local_pos_.pose.position.x) && (current_local_pos_.pose.position.x * 1.05 < current_local_pos_.pose.position.x) && 
+                     (current_local_pos_.pose.position.y * 0.95 > current_local_pos_.pose.position.y) && (current_local_pos_.pose.position.y * 1.05 < current_local_pos_.pose.position.y)) // Implement this condition based on your use case
+                {
+                    RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
+                    break;
+                }
+            }
+        }
         void change_altitude(double altitude){
             // Takeoff command
             geometry_msgs::msg::PoseStamped target_pose;
@@ -163,11 +182,11 @@
             target_pose.pose.position.z = altitude; // Altitude
             // local_pos_pub_->publish(target_pose);
             rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+            RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
+                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
             while (rclcpp::ok())
             {
                 local_pos_pub_->publish(target_pose);
-                RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-                            target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
                 if ((current_local_pos_.pose.position.z * 0.95 > current_local_pos_.pose.position.z) && (current_local_pos_.pose.position.z * 1.05 < current_local_pos_.pose.position.z) ) // Implement this condition based on your use case
                 {
                     RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");

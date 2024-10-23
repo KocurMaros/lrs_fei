@@ -11,8 +11,6 @@ PGMMapLoader::PGMMapLoader() : Node("pgm_map_loader")
 
 void PGMMapLoader::loadMap(const std::string &pgm_file)
 {
-    nav_msgs::msg::OccupancyGrid map;
-    
     // Load and publish the map
     loadPGM(pgm_file, map);
     map_publisher_->publish(map);
@@ -29,7 +27,7 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
 
     std::string line;
     int width, height;
-    double resolution = 13.0 / 366;  // Known size: 13 meters wide, 366 pixels
+    double resolution = 0.1;  // Known size: 13 meters wide, 366 pixels
     std::vector<double> origin = {0.0, 0.0, 0.0};
 
     // Ignore the first line (P2)
