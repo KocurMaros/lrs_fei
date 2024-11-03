@@ -6,16 +6,20 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include "rclcpp/time.hpp"
 #include <iostream>
+#include <memory>
+#include <functional>
+
 
 struct Node
 {
     int x, y;
     double cost;
-    Node* parent;
+    std::shared_ptr<Node> parent;
 
-    Node(int x_, int y_, double cost_ = 0.0, Node* parent_ = nullptr)
+    Node(int x_, int y_, double cost_ = 0.0, std::shared_ptr<Node> parent_ = nullptr)
         : x(x_), y(y_), cost(cost_), parent(parent_) {}
 };
+
 
 // Manhattan distance heuristic
 double heuristic(int x1, int y1, int x2, int y2)
@@ -41,17 +45,34 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
 {
     std::cout << "Start: " << start_x << ", " << start_y << std::endl;
     std::cout << "Goal: " << goal_x << ", " << goal_y << std::endl;
-    std::priority_queue<std::pair<double, Node*>, std::vector<std::pair<double, Node*>>, std::greater<>> open_list;
-    std::vector<std::vector<bool>> visited(map.info.width, std::vector<bool>(map.info.height, false));
 
-    Node* start_node = new Node(start_x, start_y);
+    struct CompareNode
+    {
+        bool operator()(const std::pair<double, std::shared_ptr<Node>>& a, const std::pair<double, std::shared_ptr<Node>>& b) const
+        {
+            return a.first > b.first; // Min-heap
+        }
+    };
+
+    std::priority_queue<
+        std::pair<double, std::shared_ptr<Node>>,
+        std::vector<std::pair<double, std::shared_ptr<Node>>>,
+        CompareNode
+    > open_list;
+
+    int width = map.info.width;
+    int height = map.info.height;
+
+    std::vector<std::vector<bool>> visited(width, std::vector<bool>(height, false));
+
+    auto start_node = std::make_shared<Node>(start_x, start_y);
     open_list.push({0.0, start_node});
 
-    Node* goal_node = nullptr;
+    std::shared_ptr<Node> goal_node = nullptr;
 
     while (!open_list.empty())
     {
-        Node* current = open_list.top().second;
+        auto current = open_list.top().second;
         open_list.pop();
 
         if (visited[current->x][current->y])
@@ -75,7 +96,7 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
             if (isValid(new_x, new_y, map) && !visited[new_x][new_y])
             {
                 double new_cost = current->cost + 1.0;
-                Node* neighbor = new Node(new_x, new_y, new_cost, current);
+                auto neighbor = std::make_shared<Node>(new_x, new_y, new_cost, current);
                 double priority = new_cost + heuristic(new_x, new_y, goal_x, goal_y);
                 open_list.push({priority, neighbor});
             }
@@ -86,7 +107,7 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
     if (goal_node != nullptr)
     {
         // Backtrack to create the path
-        for (Node* n = goal_node; n != nullptr; n = n->parent)
+        for (auto n = goal_node; n != nullptr; n = n->parent)
         {
             geometry_msgs::msg::PoseStamped pose;
             pose.pose.position.x = n->x * map.info.resolution + map.info.origin.position.x;
@@ -95,13 +116,14 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
         }
         std::reverse(path.begin(), path.end());
     }
-
-    // Free dynamically allocated memory
-    delete start_node;
-    delete goal_node;
+    else
+    {
+        std::cout << "No path found." << std::endl;
+    }
 
     return path;
 }
+    
 
 nav_msgs::msg::Path generatePath(
     const nav_msgs::msg::OccupancyGrid& map,

@@ -4,6 +4,10 @@
     #include <mavros_msgs/srv/command_bool.hpp>
     #include <mavros_msgs/srv/set_mode.hpp>
     #include <mavros_msgs/srv/command_tol.hpp>
+    #include <chrono>
+    #include <thread>
+    using namespace std::chrono_literals;
+    #include <iostream> 
 
     #include "pgm_map_loader.hpp"
     #include "drone_navigation.hpp"
@@ -49,30 +53,25 @@
             set_mode("GUIDED");
             set_arm();
             std::this_thread::sleep_for(500ms);
-            // change_altitude(0.75);
+
             
             geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = 0.0;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = 1.5;  // Set the y-coordinate of your waypoint
+            goal_pose.position.x = -1.5;  // Set the x-coordinate of your waypoint
+            goal_pose.position.y = -1.5;  // Set the y-coordinate of your waypoint
             goal_pose.position.z = 0.75; // Desired altitude
 
             // Get drone's current position
             geometry_msgs::msg::Pose drone_position;
             drone_position.position = current_local_pos_.pose.position;
 
-            // // Use your path generator
-            map_loader.loadMap(map_names[2]);
-            nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
-            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
-            // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-            //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            for(auto pose_stamped : path.poses){
-                RCLCPP_INFO(this->get_logger(), "Path: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-            }
-            // set_arm();
-            go_to_point((-1.0)*(path.poses.back().pose.position.x),(-1.0)*(path.poses.back().pose.position.y), 0.75);
+            change_altitude(goal_pose.position.z);
+
+            RCLCPP_INFO(this->get_logger(), "Going to position");
+            go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+            
+            RCLCPP_INFO(this->get_logger(), " landing ");
+            goal_pose.position.z = 0;
+            go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
 
         }   
 
@@ -156,19 +155,23 @@
             geometry_msgs::msg::PoseStamped target_pose;
             target_pose.pose.position.x = x; // Set target position
             target_pose.pose.position.y = y;
-            target_pose.pose.position.z = z; // Altitude
+            target_pose.pose.position.z = z;
             RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-                        target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
-            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+                       target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
+                rclcpp::Rate rate(10); // Set the frequency to 10 Hz
             while (rclcpp::ok())
             {
                 local_pos_pub_->publish(target_pose);
-                if ((current_local_pos_.pose.position.x * 0.95 > current_local_pos_.pose.position.x) && (current_local_pos_.pose.position.x * 1.05 < current_local_pos_.pose.position.x) && 
-                     (current_local_pos_.pose.position.y * 0.95 > current_local_pos_.pose.position.y) && (current_local_pos_.pose.position.y * 1.05 < current_local_pos_.pose.position.y)) // Implement this condition based on your use case
-                {
-                    RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
-                    break;
+                const double tolerance = 0.025; 
+
+                if (std::abs(current_local_pos_.pose.position.x - target_pose.pose.position.x) <= tolerance &&
+                std::abs(current_local_pos_.pose.position.y - target_pose.pose.position.y) <= tolerance) {
+                RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
+                break;
                 }
+
+                rclcpp::spin_some(this->get_node_base_interface());
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
         void change_altitude(double altitude){
@@ -201,11 +204,12 @@
                             // Wait for takeoff acknowledgment
                             while (true)
                             {
-                                if ((current_local_pos_.pose.position.z * 0.95 > current_local_pos_.pose.position.z) && (current_local_pos_.pose.position.z * 1.05 < current_local_pos_.pose.position.z) ) // Implement this condition based on your use case
-                                {
-                                    RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is airborne.");
-                                    break;
-                                }
+                                const double tolerance = 0.025; // 5 cm tolerance
+                                    if (std::abs(current_local_pos_.pose.position.z - altitude) <= tolerance)
+                                    {
+                                        RCLCPP_INFO(this->get_logger(), "Takeoff acknowledged, drone is at desired height.");
+                                        break;
+                                    }
                                 rclcpp::spin_some(this->get_node_base_interface());
                                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                             }
@@ -223,8 +227,6 @@
                     return;
                 }
             }
-            // Takeoff command
-            std::cout << "Takeoff acknowledged, drone is airborne." << std::endl;
         }
         rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr state_sub_;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_pos_pub_;
