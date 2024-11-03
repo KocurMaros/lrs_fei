@@ -54,7 +54,19 @@
             set_arm();
             std::this_thread::sleep_for(500ms);
 
-            
+            // Use your path generator
+            //map_loader.loadMap(map_names[2]);
+            //nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
+            //RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+            //            current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            //nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+            //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            //for(auto pose_stamped : path.poses){
+            // RCLCPP_INFO(this->get_logger(), "Path: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
+            //}
+
+
             geometry_msgs::msg::Pose goal_pose;
             goal_pose.position.x = -1.5;  // Set the x-coordinate of your waypoint
             goal_pose.position.y = -1.5;  // Set the y-coordinate of your waypoint
@@ -70,8 +82,8 @@
             go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
             
             RCLCPP_INFO(this->get_logger(), " landing ");
-            goal_pose.position.z = 0;
-            go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+            goal_pose.position.z = 0.01;
+             go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
 
         }   
 
@@ -165,7 +177,8 @@
                 const double tolerance = 0.025; 
 
                 if (std::abs(current_local_pos_.pose.position.x - target_pose.pose.position.x) <= tolerance &&
-                std::abs(current_local_pos_.pose.position.y - target_pose.pose.position.y) <= tolerance) {
+                std::abs(current_local_pos_.pose.position.y - target_pose.pose.position.y) <= tolerance &&
+                std::abs(current_local_pos_.pose.position.z - target_pose.pose.position.z) <= tolerance) {
                 RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
                 break;
                 }
