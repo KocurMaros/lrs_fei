@@ -196,7 +196,7 @@ std::vector<std::string> PGMMapLoader::generateMapFilenames()
 
     return map_filenames;
 }
-std::vector<Waypoint> LoadPCDNode::loadWaypoints(const std::string &filename)
+std::vector<Waypoint> PGMMapLoader::loadWaypoints(const std::string &filename)
 {
     std::vector<Waypoint> waypoints;
     std::ifstream file(filename);
@@ -235,6 +235,5 @@ std::vector<Waypoint> LoadPCDNode::loadWaypoints(const std::string &filename)
     }
 
     waypoints_ = waypoints; // Store waypoints as a member variable
-    publishTrajectory();
     return waypoints;
 }

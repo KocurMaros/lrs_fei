@@ -26,9 +26,10 @@
                 RCLCPP_INFO(this->get_logger(), "Loading map: %s", map_name.c_str());
                 // Use the map data
             }
-            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("LRS-FEI/mission_1_all.csv");
-            for(const auto &way : waypoints){
-                RCLCPP_INFO(this->get_logger(), "%f, %f, %f", way.x , way.y, way.z);
+            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_2_simple.csv");
+            for (auto &waypoint : waypoints)
+            {
+                std::cout << "Waypoint: " <<  waypoint.x << ", " << waypoint.y << std::endl;
             }
             // Set up ROS publishers, subscribers, and service clients
             state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
