@@ -112,6 +112,7 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
             geometry_msgs::msg::PoseStamped pose;
             pose.pose.position.x = n->x * map.info.resolution + map.info.origin.position.x;
             pose.pose.position.y = n->y * map.info.resolution + map.info.origin.position.y;
+            
             path.push_back(pose);
         }
         std::reverse(path.begin(), path.end());
@@ -148,7 +149,30 @@ nav_msgs::msg::Path generatePath(
 
     // Generate path using A* algorithm
     std::vector<geometry_msgs::msg::PoseStamped> path_points = aStarPathfinding(map, start_x, start_y, goal_x, goal_y);
+    // Remove points in the same direction, keep only points where direction changes
+    std::vector<geometry_msgs::msg::PoseStamped> optimized_path;
+    if (!path_points.empty())
+    {
+        optimized_path.push_back(path_points.front());
+        for (size_t i = 1; i < path_points.size() - 1; ++i)
+        {
+            auto& prev = path_points[i - 1].pose.position;
+            auto& curr = path_points[i].pose.position;
+            auto& next = path_points[i + 1].pose.position;
 
+            double dx1 = curr.x - prev.x;
+            double dy1 = curr.y - prev.y;
+            double dx2 = next.x - curr.x;
+            double dy2 = next.y - curr.y;
+
+            if (dx1 * dy2 != dy1 * dx2) // Check if direction changes
+            {
+                optimized_path.push_back(path_points[i]);
+            }
+        }
+        optimized_path.push_back(path_points.back());
+    }
+    path_points = optimized_path;
     // Convert to nav_msgs::msg::Path
     nav_msgs::msg::Path path;
     path.header.frame_id = "map"; // Set your frame of reference

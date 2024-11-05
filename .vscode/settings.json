@@ -77,5 +77,6 @@
         "__locale": "cpp",
         "__functional_base": "cpp",
         "locale": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/home/laptop/school/lrs_project1/src/template_drone_control"
 }

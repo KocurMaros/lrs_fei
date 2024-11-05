@@ -14,11 +14,27 @@
 
     using namespace std::chrono_literals;
 
+    struct map_index{
+        double height;
+        int index;
+    };
     class TemplateDroneControl : public rclcpp::Node
     {
     public:
         TemplateDroneControl() : Node("template_drone_control_node")
         {
+            std::vector<map_index> map_heights;
+            map_heights.push_back({0.25, 0});
+            map_heights.push_back({0.75, 1});
+            map_heights.push_back({0.8, 2});
+            map_heights.push_back({1.0, 3});
+            map_heights.push_back({1.25, 4});
+            map_heights.push_back({1.5, 5});
+            map_heights.push_back({1.75, 6});
+            map_heights.push_back({1.8, 7});
+            map_heights.push_back({2.0, 8});
+            map_heights.push_back({2.25, 9});
+            
             PGMMapLoader map_loader;
             std::vector<std::string> map_names = map_loader.generateMapFilenames();
             for (auto &map_name : map_names)
@@ -60,45 +76,41 @@
 
             for (auto &waypoint : waypoints)
             {
-            std::cout << "Waypoint: " <<  waypoint.x << ", " << waypoint.y << std::endl;
+                geometry_msgs::msg::Pose goal_pose;
+                goal_pose.position.x = waypoint.x ;  // Set the x-coordinate of your waypoint
+                goal_pose.position.y = (288*0.05)-waypoint.y ;  // Set the y-coordinate of your waypoint
+                RCLCPP_INFO(this->get_logger(), "Waypoint: %f, %f", goal_pose.position.x, goal_pose.position.y);
+                RCLCPP_INFO(this->get_logger(), "Waypoint z: %f", waypoint.z);
+                goal_pose.position.z = waypoint.z; // Desired altitude
 
-            geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = waypoint.x ;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = (288*0.05)-waypoint.y ;  // Set the y-coordinate of your waypoint
-            goal_pose.position.z = waypoint.z; // Desired altitude
+                change_altitude(goal_pose.position.z);
 
-            // Get drone's current position
-            geometry_msgs::msg::Pose drone_position;
+                // Get drone's current position
+                geometry_msgs::msg::Pose drone_position;
 
-            drone_position.position.x = current_local_pos_.pose.position.y + 13.6;
-            drone_position.position.y = (288*0.05)+current_local_pos_.pose.position.x - 1.5;
+                drone_position.position.x = current_local_pos_.pose.position.y + 13.6;
+                drone_position.position.y = (288*0.05)+current_local_pos_.pose.position.x - 1.5;
+                // Use your path generator
+                for(int i = 0; i < 10; i++){
+                    if(map_heights[i].height >= goal_pose.position.z){
+                        std::cout << "Map index: " << map_heights[i].index << std::endl;
+                        std::cout << map_names[map_heights[i].index] << std::endl;
+                        map_loader.loadMap(map_names[map_heights[i].index]);
+                        break;
+                    }
+                }
+                nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
+                RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+                            current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+                nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
 
-            // Use your path generator
-            map_loader.loadMap(map_names[2]);
-            nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
-            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
-            change_altitude(goal_pose.position.z);
-
-
-            
-
-            
-            for(auto pose_stamped : path.poses){
-            pose_stamped.pose.position.x = pose_stamped.pose.position.x;
-            pose_stamped.pose.position.y = (288*0.05) - pose_stamped.pose.position.y;
-            RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-            go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), goal_pose.position.z);     
+                for(auto pose_stamped : path.poses){
+                    pose_stamped.pose.position.x = pose_stamped.pose.position.x;
+                    pose_stamped.pose.position.y = (288*0.05) - pose_stamped.pose.position.y;
+                    RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
+                    go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), goal_pose.position.z);     
+                }   
             }
-            }
-
-
-            
-            
-
-            
-
         }   
 
     private:
