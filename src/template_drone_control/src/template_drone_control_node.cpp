@@ -26,7 +26,10 @@
                 RCLCPP_INFO(this->get_logger(), "Loading map: %s", map_name.c_str());
                 // Use the map data
             }
-            
+            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("LRS-FEI/mission_1_all.csv");
+            for(const auto &way : waypoints){
+                RCLCPP_INFO(this->get_logger(), "%f, %f, %f", way.x , way.y, way.z);
+            }
             // Set up ROS publishers, subscribers, and service clients
             state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
                 "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
@@ -54,36 +57,36 @@
             set_arm();
             std::this_thread::sleep_for(500ms);
 
-            // Use your path generator
-            //map_loader.loadMap(map_names[2]);
-            //nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
-            //RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-            //            current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            //nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
-            // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-            //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
-            //for(auto pose_stamped : path.poses){
-            // RCLCPP_INFO(this->get_logger(), "Path: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-            //}
-
-
             geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = -1.5;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = -1.5;  // Set the y-coordinate of your waypoint
+            goal_pose.position.x = 6;  // Set the x-coordinate of your waypoint
+            goal_pose.position.y = 7;  // Set the y-coordinate of your waypoint
             goal_pose.position.z = 0.75; // Desired altitude
 
             // Get drone's current position
             geometry_msgs::msg::Pose drone_position;
-            drone_position.position = current_local_pos_.pose.position;
+            drone_position.position.x = 7;
+            drone_position.position.y = 8;
 
-            change_altitude(goal_pose.position.z);
-
-            RCLCPP_INFO(this->get_logger(), "Going to position");
-            go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+            // Use your path generator
+            map_loader.loadMap(map_names[2]);
+            nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
+            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
             
-            RCLCPP_INFO(this->get_logger(), " landing ");
-            goal_pose.position.z = 0.01;
-             go_to_point(goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+            //change_altitude(goal_pose.position.z);
+         
+
+            
+            for(auto pose_stamped : path.poses){
+            RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
+            //go_to_point(((-1.0)*pose_stamped.pose.position.x), ((-1.0)*pose_stamped.pose.position.y), goal_pose.position.z);     
+            }
+            
+
+            
 
         }   
 

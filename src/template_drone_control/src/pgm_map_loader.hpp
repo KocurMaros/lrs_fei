@@ -13,6 +13,8 @@ public:
     PGMMapLoader();
     void loadMap(const std::string &pgm_file);
     std::vector<std::string> generateMapFilenames();
+    std::vector<Waypoint> loadWaypoints(const std::string &filename);
+
     nav_msgs::msg::OccupancyGrid getOccupancyGrid() { return map; }
 private:
     nav_msgs::msg::OccupancyGrid map;
