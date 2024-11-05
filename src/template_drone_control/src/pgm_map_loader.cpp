@@ -29,7 +29,7 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
 
     std::string line;
     int width, height;
-    double resolution = 13.0/366.0;  // Known size: 13 meters wide, 366 pixels
+    double resolution = 0.05;  // Known size: 13 meters wide, 366 pixels
     std::vector<double> origin = {0.0, 0.0, 0.0};
 
     // Ignore the first line (P2)

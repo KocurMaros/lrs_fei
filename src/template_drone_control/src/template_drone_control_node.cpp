@@ -26,11 +26,10 @@
                 RCLCPP_INFO(this->get_logger(), "Loading map: %s", map_name.c_str());
                 // Use the map data
             }
+
+            double start_x = current_local_pos_.pose.position.x;
+            double start_y = current_local_pos_.pose.position.y;
             std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_2_simple.csv");
-            for (auto &waypoint : waypoints)
-            {
-                std::cout << "Waypoint: " <<  waypoint.x << ", " << waypoint.y << std::endl;
-            }
             // Set up ROS publishers, subscribers, and service clients
             state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
                 "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
@@ -58,15 +57,21 @@
             set_arm();
             std::this_thread::sleep_for(500ms);
 
+
+            for (auto &waypoint : waypoints)
+            {
+            std::cout << "Waypoint: " <<  waypoint.x << ", " << waypoint.y << std::endl;
+
             geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = 6;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = 7;  // Set the y-coordinate of your waypoint
-            goal_pose.position.z = 0.75; // Desired altitude
+            goal_pose.position.x = waypoint.x ;  // Set the x-coordinate of your waypoint
+            goal_pose.position.y = (288*0.05)-waypoint.y ;  // Set the y-coordinate of your waypoint
+            goal_pose.position.z = waypoint.z; // Desired altitude
 
             // Get drone's current position
             geometry_msgs::msg::Pose drone_position;
-            drone_position.position.x = 7;
-            drone_position.position.y = 8;
+
+            drone_position.position.x = current_local_pos_.pose.position.y + 13.6;
+            drone_position.position.y = (288*0.05)+current_local_pos_.pose.position.x - 1.5;
 
             // Use your path generator
             map_loader.loadMap(map_names[2]);
@@ -74,17 +79,22 @@
             RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
             nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
-            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            change_altitude(goal_pose.position.z);
+
+
             
-            //change_altitude(goal_pose.position.z);
-         
 
             
             for(auto pose_stamped : path.poses){
+            pose_stamped.pose.position.x = pose_stamped.pose.position.x;
+            pose_stamped.pose.position.y = (288*0.05) - pose_stamped.pose.position.y;
             RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-            //go_to_point(((-1.0)*pose_stamped.pose.position.x), ((-1.0)*pose_stamped.pose.position.y), goal_pose.position.z);     
+            go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), goal_pose.position.z);     
             }
+            }
+
+
+            
             
 
             
