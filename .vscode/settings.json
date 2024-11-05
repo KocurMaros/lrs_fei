@@ -76,7 +76,12 @@
         "__tree": "cpp",
         "__locale": "cpp",
         "__functional_base": "cpp",
-        "locale": "cpp"
+        "locale": "cpp",
+        "csignal": "cpp",
+        "strstream": "cpp",
+        "future": "cpp",
+        "shared_mutex": "cpp",
+        "cfenv": "cpp"
     },
     "cmake.sourceDirectory": "/home/laptop/school/lrs_project1/src/template_drone_control"
 }

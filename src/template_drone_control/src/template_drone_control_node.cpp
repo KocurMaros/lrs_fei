@@ -34,7 +34,7 @@
             map_heights.push_back({1.8, 7});
             map_heights.push_back({2.0, 8});
             map_heights.push_back({2.25, 9});
-            
+
             PGMMapLoader map_loader;
             std::vector<std::string> map_names = map_loader.generateMapFilenames();
             for (auto &map_name : map_names)
@@ -45,7 +45,7 @@
 
             double start_x = current_local_pos_.pose.position.x;
             double start_y = current_local_pos_.pose.position.y;
-            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_2_simple.csv");
+            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_1_all.csv");
             // Set up ROS publishers, subscribers, and service clients
             state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
                 "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
@@ -73,7 +73,11 @@
             set_arm();
             std::this_thread::sleep_for(500ms);
 
+            double precision = 0.1;
 
+            std::string key = "yaw";
+            size_t pos;
+            std::string numberStr;
             for (auto &waypoint : waypoints)
             {
                 geometry_msgs::msg::Pose goal_pose;
@@ -82,9 +86,30 @@
                 RCLCPP_INFO(this->get_logger(), "Waypoint: %f, %f", goal_pose.position.x, goal_pose.position.y);
                 RCLCPP_INFO(this->get_logger(), "Waypoint z: %f", waypoint.z);
                 goal_pose.position.z = waypoint.z; // Desired altitude
+                std::cout << "Waypoint: " << waypoint.task << std::endl;
+                pos = waypoint.task.find(key);
+                if (pos != std::string::npos) {
+                    // "yaw" is found; parse the number after it
+                    numberStr = waypoint.task.substr(pos + key.length());
+                }
+                if(waypoint.task == "takeoff"){
+                    takeoff(waypoint.z);
+                    RCLCPP_INFO(this->get_logger(), "Taking off...");
+                }else if(waypoint.task == "land"){
+                    change_altitude(0);
+                    RCLCPP_INFO(this->get_logger(), "Landing...");
+                }else{
+                    change_altitude(goal_pose.position.z);
+                    std::cout << "Waypoint: " << waypoint.task << "\n\n\n\n";
 
-                change_altitude(goal_pose.position.z);
+                }
+                if (waypoint.precision == "hard") {
+                    precision = 0.05;
+                } else if (waypoint.precision == "soft") {
+                    precision = 0.2;
+                }
 
+                
                 // Get drone's current position
                 geometry_msgs::msg::Pose drone_position;
 
@@ -108,8 +133,16 @@
                     pose_stamped.pose.position.x = pose_stamped.pose.position.x;
                     pose_stamped.pose.position.y = (288*0.05) - pose_stamped.pose.position.y;
                     RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-                    go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), goal_pose.position.z);     
-                }   
+                    go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.task, precision);     
+                }
+                try {
+                    int number = std::stoi(numberStr); // Convert to integer
+                    std::cout << "Found yaw with value: " << number << std::endl;   
+                    orient(number);
+                } catch (std::invalid_argument&) {
+                    std::cerr << "No valid number found after yaw" << std::endl;
+                }
+                
             }
         }   
 
@@ -119,8 +152,10 @@
         {
             current_local_pos_ = *msg;
             // Get and log the current local position of the drone
-            RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
-                        current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            // RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
+            //             current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            // RCLCPP_INFO(this->get_logger(), "Current Local Orientation: %f, %f, %f, %f",
+            //             current_local_pos_.pose.orientation.x, current_local_pos_.pose.orientation.y, current_local_pos_.pose.orientation.z, current_local_pos_.pose.orientation.w);
         }
 
         void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
@@ -188,32 +223,64 @@
                 return;
             }
         }
-        void go_to_point(double x, double y, double z){
+        void go_to_point(double x, double y, std::string task, double tolerance){
             // Go to a specific point
             geometry_msgs::msg::PoseStamped target_pose;
             target_pose.pose.position.x = x; // Set target position
             target_pose.pose.position.y = y;
-            target_pose.pose.position.z = z;
+            target_pose.pose.position.z = current_local_pos_.pose.position.z; // Maintain current altitude
+            target_pose.pose.orientation.x = current_local_pos_.pose.orientation.x;
+            target_pose.pose.orientation.y = current_local_pos_.pose.orientation.y;
+            target_pose.pose.orientation.z = current_local_pos_.pose.orientation.z;
+            target_pose.pose.orientation.w = current_local_pos_.pose.orientation.w;
+
             RCLCPP_INFO(this->get_logger(), "Sending position command: x=%f, y=%f, z=%f", 
-                       target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z);
-                rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+                       target_pose.pose.position.x*(-1.0)+1.5, target_pose.pose.position.y+13.6, target_pose.pose.position.z);
+            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
             while (rclcpp::ok())
             {
                 local_pos_pub_->publish(target_pose);
-                const double tolerance = 0.025; 
-
+                
+                 
                 if (std::abs(current_local_pos_.pose.position.x - target_pose.pose.position.x) <= tolerance &&
-                std::abs(current_local_pos_.pose.position.y - target_pose.pose.position.y) <= tolerance &&
-                std::abs(current_local_pos_.pose.position.z - target_pose.pose.position.z) <= tolerance) {
-                RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
-                break;
+                    std::abs(current_local_pos_.pose.position.y - target_pose.pose.position.y) <= tolerance &&
+                    std::abs(current_local_pos_.pose.position.z - target_pose.pose.position.z) <= tolerance) {
+                    RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
+                    break;
                 }
 
                 rclcpp::spin_some(this->get_node_base_interface());
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
-        void change_altitude(double altitude){
+        void orient(double yaw){
+            // Set yaw angle
+            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+            geometry_msgs::msg::PoseStamped target_pose;
+            target_pose.pose.position.x = current_local_pos_.pose.position.x;
+            target_pose.pose.position.y = current_local_pos_.pose.position.y;
+            target_pose.pose.position.z = current_local_pos_.pose.position.z;
+            target_pose.pose.orientation.x = current_local_pos_.pose.orientation.x;
+            target_pose.pose.orientation.y = current_local_pos_.pose.orientation.y;
+            target_pose.pose.orientation.z = current_local_pos_.pose.orientation.z-cos(yaw*3.14159265359/180);
+            target_pose.pose.orientation.w = current_local_pos_.pose.orientation.w;
+
+            RCLCPP_INFO(this->get_logger(), "Sending orientation command yaw=%f", 
+                    target_pose.pose.orientation.z);
+            std::cout << "Current yaw: " << current_local_pos_.pose.orientation.z << std::endl;
+            std::cout << "Target yaw: " << target_pose.pose.orientation.z << std::endl;
+            while (rclcpp::ok())
+            {
+                local_pos_pub_->publish(target_pose); 
+                if(std::abs(current_local_pos_.pose.orientation.z - target_pose.pose.orientation.z) <= 0.1){
+                    RCLCPP_INFO(this->get_logger(), "Arrived at target orientation.");
+                    break;
+                }
+                rclcpp::spin_some(this->get_node_base_interface());
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        void takeoff(double altitude){
             // Arm the drone
             auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
             arm_request->value = true;
@@ -265,6 +332,33 @@
                     RCLCPP_ERROR(this->get_logger(), "Failed to arm the drone.");
                     return;
                 }
+            }
+        }
+        void change_altitude(double altitude){
+            // Go to a specific point
+            geometry_msgs::msg::PoseStamped target_pose;
+            target_pose.pose.position.x = current_local_pos_.pose.position.x; // Set target position
+            target_pose.pose.position.y = current_local_pos_.pose.position.y;
+            target_pose.pose.position.z = altitude; // Maintain current altitude
+            target_pose.pose.orientation.x = current_local_pos_.pose.orientation.x;
+            target_pose.pose.orientation.y = current_local_pos_.pose.orientation.y;
+            target_pose.pose.orientation.z = current_local_pos_.pose.orientation.z;
+            target_pose.pose.orientation.w = current_local_pos_.pose.orientation.w;
+            RCLCPP_INFO(this->get_logger(), "Sending altitude command: z=%f", 
+                target_pose.pose.position.z);
+            rclcpp::Rate rate(10); // Set the frequency to 10 Hz
+            while (rclcpp::ok())
+            {
+                local_pos_pub_->publish(target_pose);
+                 
+                if (
+                    std::abs(current_local_pos_.pose.position.z - target_pose.pose.position.z) <= 0.2) {
+                    RCLCPP_INFO(this->get_logger(), "Arrived at target position.");
+                    break;
+                }
+
+                rclcpp::spin_some(this->get_node_base_interface());
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
         rclcpp::Subscription<mavros_msgs::msg::State>::SharedPtr state_sub_;
