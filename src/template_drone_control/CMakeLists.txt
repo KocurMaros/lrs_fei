@@ -13,6 +13,8 @@ find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS io)
 find_package(OpenCV REQUIRED)
 find_package(YAML-CPP REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 add_executable(template_drone_control_node
   src/template_drone_control_node.cpp
@@ -31,6 +33,8 @@ ament_target_dependencies(template_drone_control_node
   pcl_conversions
   OpenCV
   YAML-CPP
+  tf2
+  tf2_geometry_msgs
   PCL)
 
 target_link_libraries(template_drone_control_node
@@ -38,6 +42,7 @@ target_link_libraries(template_drone_control_node
 
 install(TARGETS
   template_drone_control_node
-  DESTINATION lib/${PROJECT_NAME})
+  DESTINATION lib/${PROJECT_NAME}
+  )
 
 ament_package()

@@ -179,21 +179,27 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
 
 std::vector<std::string> PGMMapLoader::generateMapFilenames()
 {
+    std::vector<std::string> map_heights;
+    map_heights.push_back("025");
+    map_heights.push_back("075");
+    map_heights.push_back("080");
+    map_heights.push_back("100");
+    map_heights.push_back("125");
+    map_heights.push_back("150");
+    map_heights.push_back("175");
+    map_heights.push_back("180");
+    map_heights.push_back("200");
+    map_heights.push_back("225");
+    
     std::vector<std::string> map_filenames;
     std::string base_path = "src/LRS-FEI/maps/FEI_LRS_2D/map_";
 
-    // Generate file names from 025 to 225 with a step of 25
-    for (int i = 25; i <= 225; i += 25)
-    {
-        // Create a string stream to format the number as 3 digits with leading zeros
-        std::stringstream ss;
-        ss << std::setw(3) << std::setfill('0') << i;
 
-        // Append the formatted number to the base path
-        std::string map_filename = base_path + ss.str() + ".pgm";
+    for(auto height : map_heights){
+        std::string map_filename = base_path + height + ".pgm";
         map_filenames.push_back(map_filename);
     }
-
+    // Generate file names from 025 to 225 with a step of 25
     return map_filenames;
 }
 std::vector<Waypoint> PGMMapLoader::loadWaypoints(const std::string &filename)
