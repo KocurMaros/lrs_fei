@@ -110,7 +110,7 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
     }
 
     // Inflate obstacles
-    int n = 3; // Number of additional occupied squares around each occupied cell
+    int n = 4; // Number of additional occupied squares around each occupied cell
     std::vector<int8_t> inflated_map_data = original_map_data; // Start with the original map data
 
     for (int y = 0; y < height; ++y)

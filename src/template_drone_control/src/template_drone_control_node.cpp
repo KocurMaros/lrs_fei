@@ -138,14 +138,17 @@
                     RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
                     go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, precision);     
                 }
-                
+                // TODO change land takeoff to set_mode("LAND") and set_mode("GUIDED")
                 if(waypoint.task == "landtakeoff"){
                     curent_z = current_local_pos_.pose.position.z;
-                    change_altitude(0);
-                    change_altitude(curent_z);
+                    // change_altitude(0);
+                    set_mode("LAND");
+                    set_mode("GUIDED"); 
+                    takeoff(curent_z);
                     RCLCPP_INFO(this->get_logger(), "landtakeoff...");
                 }else if(waypoint.task == "land"){
-                    change_altitude(0);
+                    // change_altitude(0);
+                    set_mode("LAND");
                     RCLCPP_INFO(this->get_logger(), "Landing...");
                 }                
                 try {
@@ -241,6 +244,12 @@
                 RCLCPP_ERROR(this->get_logger(), "Failed to change mode to %s", mode);
                 return;
             }
+            if(mode == "LAND"){
+                while(current_local_pos_.pose.position.z > 0.15){
+                    rclcpp::spin_some(this->get_node_base_interface());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
         }
         void go_to_point(double x, double y, double z, double tolerance){
             // Go to a specific point
@@ -296,11 +305,11 @@
                 double current_yaw_updated = tf2::getYaw(current_local_pos_.pose.orientation);
 
                 // Log current and target yaw
-                RCLCPP_INFO(this->get_logger(), "Current yaw: %f, Target yaw: %f",
-                            current_yaw_updated, target_yaw);
+                // RCLCPP_INFO(this->get_logger(), "Current yaw: %f, Target yaw: %f",
+                            // current_yaw_updated, target_yaw);
 
                 // Check if within tolerance (0.05 radians ~ 2.9 degrees)
-                if (std::abs(current_yaw_updated - target_yaw) <= 0.05) {
+                if (std::abs(current_yaw_updated - target_yaw) <= 0.15) {
                     RCLCPP_INFO(this->get_logger(), "Arrived at target orientation.");
                     break;
                 }
