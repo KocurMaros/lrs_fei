@@ -1,17 +1,29 @@
-<?xml version="1.0"?>
 <package format="3">
   <name>template_drone_control</name>
-  <version>0.0.1</version>
-  <description>Offboard control node package</description>
-  <maintainer email="your_email@example.com">Your Name</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.0.0</version>
+  <description>Template for drone control</description>
+  <maintainer email="user@todo.todo">Your Name</maintainer>
+  <license>TODO</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>geometry_msgs</depend>
-  <depend>mavros_msgs</depend>
+  <build_depend>rclcpp</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>mavros_msgs</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>pcl_conversions</build_depend>
+  <build_depend>visualization_msgs</build_depend>
 
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>mavros_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>pcl_conversions</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  
   <export>
     <build_type>ament_cmake</build_type>
   </export>

@@ -1,29 +1,48 @@
 cmake_minimum_required(VERSION 3.5)
 project(template_drone_control)
 
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
-
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-# Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS io)
+find_package(OpenCV REQUIRED)
+find_package(YAML-CPP REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
-# Declare a C++ executable
-add_executable(template_drone_control_node src/template_drone_control_node.cpp)
+add_executable(template_drone_control_node
+  src/template_drone_control_node.cpp
+  src/drone_navigation.cpp
+  src/load_pcd_node.cpp
+  src/pgm_map_loader.cpp)
 
-# Specify libraries to link a library or executable target against
-ament_target_dependencies(template_drone_control_node rclcpp geometry_msgs mavros_msgs)
+ament_target_dependencies(template_drone_control_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  visualization_msgs
+  mavros_msgs
+  nav2_msgs
+  rclcpp_action
+  pcl_conversions
+  OpenCV
+  YAML-CPP
+  tf2
+  tf2_geometry_msgs
+  PCL)
 
-# Install the executable
-install(TARGETS template_drone_control_node DESTINATION lib/${PROJECT_NAME})
+target_link_libraries(template_drone_control_node
+  ${YAML_CPP_LIBRARIES})
 
-# Ament package
+install(TARGETS
+  template_drone_control_node
+  DESTINATION lib/${PROJECT_NAME}
+  )
+
 ament_package()
