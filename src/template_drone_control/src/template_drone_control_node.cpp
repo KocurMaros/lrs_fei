@@ -109,7 +109,7 @@
                 if (waypoint.precision == "hard") {
                     precision = 0.05;
                 } else if (waypoint.precision == "soft") {
-                    precision = 0.2;
+                    precision = 0.1;
                 }
 
                 
@@ -136,7 +136,11 @@
                     pose_stamped.pose.position.x = pose_stamped.pose.position.x;
                     pose_stamped.pose.position.y = (288*0.05) - pose_stamped.pose.position.y;
                     RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
-                    go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, precision);     
+                    if (&pose_stamped == &path.poses.back()) {
+                        go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, precision);
+                    } else {
+                        go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, 0.25);
+                    }
                 }
                 // TODO change land takeoff to set_mode("LAND") and set_mode("GUIDED")
                 if(waypoint.task == "landtakeoff"){
