@@ -125,35 +125,25 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
     return path;
 }
     
-
 nav_msgs::msg::Path generatePath(
     const nav_msgs::msg::OccupancyGrid& map,
     const geometry_msgs::msg::Pose& drone_position,
     const geometry_msgs::msg::Pose& goal_position)
 {
-    // Convert real-world positions to grid coordinates
     int start_x = static_cast<int>((drone_position.position.x - map.info.origin.position.x) / map.info.resolution);
     int start_y = static_cast<int>((drone_position.position.y - map.info.origin.position.y) / map.info.resolution);
 
     int goal_x = static_cast<int>((goal_position.position.x - map.info.origin.position.x) / map.info.resolution);
     int goal_y = static_cast<int>((goal_position.position.y - map.info.origin.position.y) / map.info.resolution);
 
-
-    std::cout << "Drone position " << drone_position.position.x << ", " << drone_position.position.y << std::endl;
-    std::cout << "Goal position " << goal_position.position.x << ", " << goal_position.position.y << std::endl;
-    std::cout << "Resolution " << map.info.resolution << std::endl;
-    std::cout << "Width " << map.info.width << std::endl;
-    std::cout << "Height " << map.info.height << std::endl;
-    std::cout << "Start: " << start_x << ", " << start_y << std::endl;
-    std::cout << "Goal: " << goal_x << ", " << goal_y << std::endl;
-
-    // Generate path using A* algorithm
     std::vector<geometry_msgs::msg::PoseStamped> path_points = aStarPathfinding(map, start_x, start_y, goal_x, goal_y);
-    // Remove points in the same direction, keep only points where direction changes
+
     std::vector<geometry_msgs::msg::PoseStamped> optimized_path;
     if (!path_points.empty())
     {
-        optimized_path.push_back(path_points.front());
+        optimized_path.push_back(path_points.front()); // Start point
+        const double tolerance = 0.3; // Adjust this threshold based on acceptable offset tolerance
+
         for (size_t i = 1; i < path_points.size() - 1; ++i)
         {
             auto& prev = path_points[i - 1].pose.position;
@@ -165,17 +155,27 @@ nav_msgs::msg::Path generatePath(
             double dx2 = next.x - curr.x;
             double dy2 = next.y - curr.y;
 
-            if (dx1 * dy2 != dy1 * dx2) // Check if direction changes
+            
+            // Check if the movement is approximately straight or diagonal
+            bool is_approx_straight = !(dx1 * dy2 != dy1 * dx2);
+
+            bool is_approx_diagonal = (std::abs(dx1) > tolerance && std::abs(dy1) > tolerance) &&
+                                      (std::abs(dx1 - dx2) <= tolerance && std::abs(dy1 - dy2) <= tolerance);
+
+            // Keep points only if there's a change in movement type
+            if ((!is_approx_diagonal && !is_approx_straight) || 
+                (is_approx_straight && (dx1 * dx2 < 0 || dy1 * dy2 < 0))) // Change in direction
             {
                 optimized_path.push_back(path_points[i]);
             }
         }
-        optimized_path.push_back(path_points.back());
+
+        optimized_path.push_back(path_points.back()); // Goal point
     }
+    
     path_points = optimized_path;
-    // Convert to nav_msgs::msg::Path
     nav_msgs::msg::Path path;
-    path.header.frame_id = "map"; // Set your frame of reference
+    path.header.frame_id = "map";
     path.header.stamp = rclcpp::Time();
     path.poses = path_points;
 
