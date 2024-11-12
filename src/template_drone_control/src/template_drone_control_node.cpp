@@ -139,7 +139,7 @@
                     if (&pose_stamped == &path.poses.back()) {
                         go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, precision);
                     } else {
-                        go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, 0.25);
+                        go_to_point((-1.0)*(pose_stamped.pose.position.y-1.5), (pose_stamped.pose.position.x-13.6), waypoint.z, 0.20);
                     }
                 }
                 // TODO change land takeoff to set_mode("LAND") and set_mode("GUIDED")
