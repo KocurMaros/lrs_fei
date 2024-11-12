@@ -16,13 +16,13 @@ find_package(YAML-CPP REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
-add_executable(template_drone_control_node
+add_executable(dronestappen_control_node
   src/template_drone_control_node.cpp
   src/drone_navigation.cpp
   src/load_pcd_node.cpp
   src/pgm_map_loader.cpp)
 
-ament_target_dependencies(template_drone_control_node
+ament_target_dependencies(dronestappen_control_node
   rclcpp
   sensor_msgs
   geometry_msgs
@@ -37,11 +37,11 @@ ament_target_dependencies(template_drone_control_node
   tf2_geometry_msgs
   PCL)
 
-target_link_libraries(template_drone_control_node
+target_link_libraries(dronestappen_control_node
   ${YAML_CPP_LIBRARIES})
 
 install(TARGETS
-  template_drone_control_node
+  dronestappen_control_node
   DESTINATION lib/${PROJECT_NAME}
   )
 
