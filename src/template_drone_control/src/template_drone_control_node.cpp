@@ -49,7 +49,7 @@
 
             double start_x = current_local_pos_.pose.position.x;
             double start_y = current_local_pos_.pose.position.y;
-            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_1_all.csv");
+            std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_3_all.csv");
             // Set up ROS publishers, subscribers, and service clients
             state_sub_ = this->create_subscription<mavros_msgs::msg::State>(
                 "mavros/state", 10, std::bind(&TemplateDroneControl::state_cb, this, std::placeholders::_1));
