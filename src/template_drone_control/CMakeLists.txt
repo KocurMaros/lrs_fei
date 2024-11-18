@@ -16,10 +16,18 @@ find_package(YAML-CPP REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
+add_library(pointcloud_subscriber src/pointcloud_subscriber.cpp)
+ament_target_dependencies(pointcloud_subscriber
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  pcl_conversions
+  PCL
+)
 add_executable(dronestappen_control_node
   src/template_drone_control_node.cpp
   src/drone_navigation.cpp
-  src/load_pcd_node.cpp
+  src/pointcloud_subscriber.cpp
   src/pgm_map_loader.cpp)
 
 ament_target_dependencies(dronestappen_control_node
@@ -37,7 +45,7 @@ ament_target_dependencies(dronestappen_control_node
   tf2_geometry_msgs
   PCL)
 
-target_link_libraries(dronestappen_control_node
+target_link_libraries(dronestappen_control_node pointcloud_subscriber
   ${YAML_CPP_LIBRARIES})
 
 install(TARGETS
