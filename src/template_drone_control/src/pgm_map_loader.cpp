@@ -6,6 +6,13 @@
 #include <vector>
 #include <iomanip>
 
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <cmath>
+#include <limits>
+#include <algorithm>
+
 PGMMapLoader::PGMMapLoader() : Node("pgm_map_loader")
 {
     map_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", 10);
@@ -17,7 +24,22 @@ void PGMMapLoader::loadMap(const std::string &pgm_file)
     loadPGM(pgm_file, map);
     map_publisher_->publish(map);
 }
-
+void PGMMapLoader::loadMapPCD(const std::string &pcd_file, int slices)
+{
+    slices_ = slices;
+    // Load and publish the map
+    loadPCDToMultiLayerGrid(pcd_file, maps, slices_);
+    map_publisher_->publish(maps[0]);
+}
+void PGMMapLoader::fromPCD(double altitude){
+    double slice_thickness = max_height_ / slices_;
+    int slice_index = static_cast<int>(std::floor(altitude / slice_thickness));
+    // Clamp slice index to valid range [0, num_slices - 1]
+    slice_index = std::max(0, std::min(slice_index, slices_ - 1));
+    std::cout << "Slice index: " << slice_index << "\n";
+    map = maps[slice_index];
+    map_publisher_->publish(map);
+}
 void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map)
 {
     std::ifstream infile(pgm_file);
@@ -177,6 +199,126 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
     std::cout << "Map height: " << map.info.height << std::endl;
 }
 
+
+void PGMMapLoader::loadPCDToMultiLayerGrid(const std::string &pcd_file, 
+                                           std::vector<nav_msgs::msg::OccupancyGrid> &maps,
+                                           int num_slices)
+{
+    // Load the PCD file using PCL
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_file, *cloud) == -1)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Failed to load PCD file: %s", pcd_file.c_str());
+        return;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "PCD file loaded. Points: %zu", cloud->size());
+
+    // Find the bounding box of the point cloud
+    double x_min = std::numeric_limits<double>::max();
+    double x_max = std::numeric_limits<double>::lowest();
+    double y_min = std::numeric_limits<double>::max();
+    double y_max = std::numeric_limits<double>::lowest();
+    double z_min = std::numeric_limits<double>::max();
+    double z_max = std::numeric_limits<double>::lowest();
+
+    for (const auto &point : cloud->points)
+    {
+        if (std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z))
+        {
+            x_min = std::min(x_min, static_cast<double>(point.x));
+            x_max = std::max(x_max, static_cast<double>(point.x));
+            y_min = std::min(y_min, static_cast<double>(point.y));
+            y_max = std::max(y_max, static_cast<double>(point.y));
+            z_min = std::min(z_min, static_cast<double>(point.z));
+            z_max = std::max(z_max, static_cast<double>(point.z));
+        }
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Point cloud bounding box:");
+    RCLCPP_INFO(this->get_logger(), "  X: [%f, %f]", x_min, x_max);
+    RCLCPP_INFO(this->get_logger(), "  Y: [%f, %f]", y_min, y_max);
+    RCLCPP_INFO(this->get_logger(), "  Z: [%f, %f]", z_min, z_max);
+    max_height_ = z_max;
+    // Derived parameters
+    double resolution = 0.05;  // Fixed resolution: 5 cm per grid cell
+    double map_width = x_max - x_min;
+    double map_height = y_max - y_min;
+    double slice_thickness = (z_max - z_min) / num_slices;
+
+    // Calculate the number of cells in the grid
+    int grid_width = static_cast<int>(std::ceil(map_width / resolution));
+    int grid_height = static_cast<int>(std::ceil(map_height / resolution));
+
+    // Initialize the occupancy grids for each slice
+    maps.resize(num_slices);
+
+    for (int slice = 0; slice < num_slices; ++slice)
+    {
+        // Initialize the occupancy grid for this slice
+        nav_msgs::msg::OccupancyGrid &map_ = maps[slice];
+        map_.info.resolution = resolution;
+        map_.info.width = grid_width;
+        map_.info.height = grid_height;
+        map_.info.origin.position.x = 0;
+        map_.info.origin.position.y = 0;
+        map_.info.origin.position.z = z_min + slice * slice_thickness; // Set origin height for this slice
+        map_.info.origin.orientation.w = 1.0;
+
+        // Initialize the map_ data
+        map_.data.resize(grid_width * grid_height, -1); // -1 for unknown cells
+    }
+
+    // Process the point cloud and project onto 2D slices
+    for (const auto &point : cloud->points)
+    {
+        // Skip invalid points
+        if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z))
+            continue;
+
+        // Determine the slice for this point based on its z-value
+        int slice_index = static_cast<int>(std::floor((point.z - z_min) / slice_thickness));
+        if (slice_index < 0 || slice_index >= num_slices)
+            continue;
+
+        nav_msgs::msg::OccupancyGrid &map_ = maps[slice_index];
+
+        // Convert the 3D point to 2D grid coordinates
+        int grid_x = static_cast<int>(std::floor((point.x - x_min) / resolution));
+        int grid_y = static_cast<int>(std::floor((point.y - y_min) / resolution));
+
+        // Ensure the point is within the bounds of the grid
+        if (grid_x >= 0 && grid_x < grid_width && grid_y >= 0 && grid_y < grid_height)
+        {
+            int index = grid_y * grid_width + grid_x;
+            map_.data[index] = 100; // Mark cell as occupied
+        }
+    }
+
+    // Optionally, write each slice's data to a text file for verification
+    for (int slice = 0; slice < num_slices; ++slice)
+    {
+        const nav_msgs::msg::OccupancyGrid &map_ = maps[slice];
+        std::ofstream slice_outfile("slice_map_" + std::to_string(slice) + ".txt");
+        if (slice_outfile.is_open())
+        {
+            for (int y = 0; y < grid_height; ++y)
+            {
+                for (int x = 0; x < grid_width; ++x)
+                {
+                    int index = y * grid_width + x;
+                    slice_outfile << (map_.data[index] == 100 ? "1 " : "0 ");
+                }
+                slice_outfile << "\n";
+            }
+            slice_outfile.close();
+            RCLCPP_INFO(this->get_logger(), "Slice %d map_ data written to slice_map_%d.txt", slice, slice);
+        }
+    }
+
+    RCLCPP_INFO(this->get_logger(), "3D point cloud projected into %d 2D occupancy grids.", num_slices);
+}
+
 std::vector<std::string> PGMMapLoader::generateMapFilenames()
 {
     std::vector<std::string> map_heights;
@@ -242,4 +384,41 @@ std::vector<Waypoint> PGMMapLoader::loadWaypoints(const std::string &filename)
 
     waypoints_ = waypoints; // Store waypoints as a member variable
     return waypoints;
+}
+
+void PGMMapLoader::saveSliceWithMarker(const nav_msgs::msg::OccupancyGrid &map, const std::string &filename, double marker_x, double marker_y)
+{
+    int grid_width = map.info.width;
+    int grid_height = map.info.height;
+    double resolution = map.info.resolution;
+    double origin_x = map.info.origin.position.x;
+    double origin_y = map.info.origin.position.y;
+
+    // Convert world coordinates (marker_x, marker_y) to grid indices
+    int grid_x = static_cast<int>((marker_x - origin_x) / resolution);
+    int grid_y = static_cast<int>((marker_y - origin_y) / resolution);
+
+    // Write the updated grid data to a text file
+    std::ofstream slice_outfile(filename);
+    if (slice_outfile.is_open())
+    {
+        for (int y = 0; y < grid_height; ++y)
+        {
+            for (int x = 0; x < grid_width; ++x)
+            {
+                int index = y * grid_width + x;
+                if(y == grid_y && x == grid_x)
+                    slice_outfile << static_cast<int>(2) << " ";
+                else    
+                    slice_outfile << static_cast<int>(map.data[index]) << " ";
+            }
+            slice_outfile << "\n";
+        }
+        slice_outfile.close();
+        std::cout << "Map slice with marker saved to " << filename << std::endl;
+    }
+    else
+    {
+        std::cerr << "Unable to open file for writing: " << filename << std::endl;
+    }
 }

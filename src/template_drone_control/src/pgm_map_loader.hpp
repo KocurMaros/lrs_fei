@@ -17,13 +17,21 @@ class PGMMapLoader : public rclcpp::Node
 public:
     PGMMapLoader();
     void loadMap(const std::string &pgm_file);
+    void loadMapPCD(const std::string &pcd_file, int slices);
     std::vector<std::string> generateMapFilenames();
     std::vector<Waypoint> loadWaypoints(const std::string &filename);
-
     nav_msgs::msg::OccupancyGrid getOccupancyGrid() { return map; }
+    void fromPCD(double altitude);
+    void saveSliceWithMarker(const nav_msgs::msg::OccupancyGrid &map, const std::string &filename, double marker_x, double marker_y);
 private:
+    int slices_;
+    double max_height_;
     nav_msgs::msg::OccupancyGrid map;
+    std::vector<nav_msgs::msg::OccupancyGrid> maps;
     void loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map);
+    void loadPCDToMultiLayerGrid(const std::string &pcd_file, 
+                                           std::vector<nav_msgs::msg::OccupancyGrid> &maps,
+                                           int num_slices);
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_publisher_;
     std::vector<Waypoint> waypoints_;
 };
