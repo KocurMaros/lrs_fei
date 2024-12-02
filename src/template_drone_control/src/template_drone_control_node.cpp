@@ -19,6 +19,9 @@ using namespace std::chrono_literals;
 
 using namespace std::chrono_literals;
 
+const static float drone_offset_x = 13.6;
+const static float drone_offset_y = 1.5;
+
 struct map_index{
     double height;
     int index;
@@ -52,40 +55,21 @@ public:
     }   
 
     void executeMissionStep(){
-        // Implement your mission logic here
-        // std::vector<map_index> map_heights;
-        // map_heights.push_back({0.25, 0});
-        // map_heights.push_back({0.75, 1});
-        // map_heights.push_back({0.8, 2});
-        // map_heights.push_back({1.0, 3});
-        // map_heights.push_back({1.25, 4});
-        // map_heights.push_back({1.5, 5});
-        // map_heights.push_back({1.75, 6});
-        // map_heights.push_back({1.8, 7});
-        // map_heights.push_back({2.0, 8});
-        // map_heights.push_back({2.25, 9});
 
         PGMMapLoader map_loader;
-        // std::vector<std::string> map_names = map_loader.generateMapFilenames();
-        // for (auto &map_name : map_names)
-        // {
-        //     RCLCPP_INFO(this->get_logger(), "Loading map: %s", map_name.c_str());
-        //     // Use the map data
-        // }
-        double start_x = current_local_pos_.pose.position.x;
-        double start_y = current_local_pos_.pose.position.y;
-        std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/mission_3_all.csv");
 
-         // Wait for MAVROS SITL connection
-        // while (rclcpp::ok() && !current_state_.connected)
-        // {
-            // rclcpp::spin_some(this->get_node_base_interface());
-        //     std::this_thread::sleep_for(100ms);
-        // }
+        std::vector<Waypoint> waypoints = map_loader.loadWaypoints("src/LRS-FEI/test.csv");
+        
         set_mode("GUIDED");
         set_arm();
         std::this_thread::sleep_for(500ms);
-
+        // takeoff(2.0);
+        // go_to_point(0.0, 6.0, 2.0, 0.2);
+        // go_to_point(-2.0, 6.0, 2.0, 0.2);
+        // std::this_thread::sleep_for(10000ms);
+        // go_to_point(0.0, 0.0, 2.0, 0.2);
+        // set_mode("LAND");
+        // return;
         double precision = 0.1;
 
         std::string key = "yaw";
@@ -95,14 +79,17 @@ public:
         int slices = 15;
         map_loader.loadMapPCD("src/LRS-FEI/maps/FEI_LRS_PCD/map.pcd", slices);
         int iteration = 0;
+
         for (auto &waypoint : waypoints)
         {
             geometry_msgs::msg::Pose goal_pose;
-            goal_pose.position.x = waypoint.x ;  // Set the x-coordinate of your waypoint
-            goal_pose.position.y = waypoint.y ;  // Set the y-coordinate of your waypoint
+            goal_pose.position.x = waypoint.x;  // Set the x-coordinate of your waypoint
+            goal_pose.position.y = waypoint.y;  // Set the y-coordinate of your waypoint
+            goal_pose.position.z = waypoint.z; // Desired altitude
+            
             RCLCPP_INFO(this->get_logger(), "Waypoint: %f, %f", goal_pose.position.x, goal_pose.position.y);
             RCLCPP_INFO(this->get_logger(), "Waypoint z: %f", waypoint.z);
-            goal_pose.position.z = waypoint.z; // Desired altitude
+            
             std::cout << "Waypoint: " << waypoint.task << std::endl;
             pos = waypoint.task.find(key);
             if (pos != std::string::npos) {
@@ -116,52 +103,44 @@ public:
             }else if(waypoint.task == "landtakeoff"){
             }else{
                 change_altitude(goal_pose.position.z);
-                std::cout << "Waypoint: " << waypoint.task << "\n\n\n\n";
             }
+
             if (waypoint.precision == "hard") {
                 precision = 0.05;
             } else if (waypoint.precision == "soft") {
-                precision = 0.1;
+                precision = 0.15;
             }
 
             
-            // Get drone's current position
+            // Get drone's current position global
             geometry_msgs::msg::Pose drone_position;
+            drone_position.position.x = current_local_pos_.pose.position.y + drone_offset_x;
+            drone_position.position.y = (-1.0)*current_local_pos_.pose.position.x + drone_offset_y;
+            drone_position.position.z = current_local_pos_.pose.position.z;
 
-            drone_position.position.x = current_local_pos_.pose.position.y + 13.6;
-            drone_position.position.y = current_local_pos_.pose.position.x + 1.5;
             // Use your path generator
             map_loader.fromPCD(goal_pose.position.z);
-            // for(int i = 0; i < 10; i++){
-            //     if(map_heights[i].height >= goal_pose.position.z){
-            //         std::cout << "Map index: " << map_heights[i].index << std::endl;
-            //         std::cout << map_names[map_heights[i].index] << std::endl;
-            //         map_loader.loadMap(map_names[map_heights[i].index]);
-            //         break;
-            //     }
-            // }
+           
             nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
-            // std::string filename = "slice_map_with_marker.txt";
-
-            // Assuming selected_map is the slice map for the altitude
-            // map_loader.saveSliceWithMarker(map, filename, drone_position.position.x, drone_position.position.y);
-
-
             RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            RCLCPP_INFO(this->get_logger(), "Goal Pose: %f, %f, %f",
+                        goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
+        
             nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
-            map_loader.saveSliceWithMarker(map, "drone.txt", drone_position.position.x, drone_position.position.y);
-            std::string filename = "point_" + std::to_string(iteration) + ".txt";
-            map_loader.saveSliceWithMarker(map, filename, goal_pose.position.x, goal_pose.position.y);
-            iteration++;
+
             for(auto pose_stamped : path.poses){
-                pose_stamped.pose.position.x = pose_stamped.pose.position.x;
-                pose_stamped.pose.position.y = pose_stamped.pose.position.y;
+                // double temp = pose_stamped.pose.position.x;
+                // pose_stamped.pose.position.x = pose_stamped.pose.position.y*(-1.0) - drone_offset_x;
+                // pose_stamped.pose.position.y = temp - drone_offset_y;
+                pose_stamped.pose.position.x -= drone_offset_x;
+                pose_stamped.pose.position.y -= drone_offset_y;
+                
                 RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
                 if (&pose_stamped == &path.poses.back()) {
-                    go_to_point((pose_stamped.pose.position.x), (pose_stamped.pose.position.y), waypoint.z, precision);
+                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, waypoint.z, precision);
                 } else {
-                    go_to_point((pose_stamped.pose.position.x), (pose_stamped.pose.position.y), waypoint.z, 0.20);
+                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, waypoint.z, 0.20);
                 }
             }
             // TODO change land takeoff to set_mode("LAND") and set_mode("GUIDED")
@@ -197,12 +176,18 @@ private:
     void local_pos_cb(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         current_local_pos_ = *msg;
+        // current_local_pos_.pose.position.x *= (-1.0);
+        // current_local_pos_.pose.position.y *= (-1.0);
+        // double temp = current_local_pos_.pose.position.x;
+        // current_local_pos_.pose.position.x = current_local_pos_.pose.position.y + drone_offset_x;
+        // current_local_pos_.pose.position.y = temp + drone_offset_y;
+        // RCLCPP_INFO(this->get_logger(), "Current pos: %f %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y);
     }
 
     void state_cb(const mavros_msgs::msg::State::SharedPtr msg)
     {
         current_state_ = *msg;
-        RCLCPP_INFO(this->get_logger(), "Current State: %s", current_state_.mode.c_str());
+        // RCLCPP_INFO(this->get_logger(), "Current State: %s", current_state_.mode.c_str());
     }
     
     void set_arm() {
@@ -257,25 +242,26 @@ private:
 
     void go_to_point(double x, double y, double z, double tolerance) {
         geometry_msgs::msg::PoseStamped target_pose;
-        target_pose.pose.position.x = x;
-        target_pose.pose.position.y = y;
+        target_pose.pose.position.x = y*(-1.0);
+        target_pose.pose.position.y = x;
         target_pose.pose.position.z = z;
         target_pose.pose.orientation = current_local_pos_.pose.orientation;
 
-        RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
 
         rclcpp::Rate rate(10); // 10 Hz
         while (rclcpp::ok()) {
             local_pos_pub_->publish(target_pose);
-
-            if (std::abs(current_local_pos_.pose.position.x - x) <= tolerance &&
-                std::abs(current_local_pos_.pose.position.y - y) <= tolerance &&
+            RCLCPP_INFO(this->get_logger(), "Current pos: %f %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y);
+            RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
+            RCLCPP_INFO(this->get_logger(), "To target point: x=%f, y=%f", current_local_pos_.pose.position.y - x, current_local_pos_.pose.position.x + y);
+            RCLCPP_INFO(this->get_logger(), "---------------------------");
+            
+            if (std::abs(current_local_pos_.pose.position.y - x) <= tolerance &&
+                std::abs(current_local_pos_.pose.position.x + y) <= tolerance &&
                 std::abs(current_local_pos_.pose.position.z - z) <= tolerance) {
                 RCLCPP_INFO(this->get_logger(), "Arrived at target point.");
                 break;
             }
-            // rclcpp::spin_some(this->get_node_base_interface());
-
             rate.sleep();
         }
     }

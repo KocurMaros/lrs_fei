@@ -36,8 +36,8 @@ void PGMMapLoader::fromPCD(double altitude){
     int slice_index = static_cast<int>(std::floor(altitude / slice_thickness));
     // Clamp slice index to valid range [0, num_slices - 1]
     slice_index = std::max(0, std::min(slice_index, slices_ - 1));
-    std::cout << "Slice index: " << slice_index << "\n";
-    map = maps[slice_index];
+    // std::cout << "Slice index: " << slice_index << "\n";
+    map = maps[6];
     map_publisher_->publish(map);
 }
 void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map)
@@ -199,6 +199,44 @@ void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::Occupancy
     std::cout << "Map height: " << map.info.height << std::endl;
 }
 
+void inflateMap(nav_msgs::msg::OccupancyGrid &map, int inflation_radius)
+{
+    int width = map.info.width;
+    int height = map.info.height;
+    std::vector<int8_t> inflated_data(map.data.size(), 0);
+
+    // Iterate over all cells in the grid
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            int index = y * width + x;
+
+            // If the cell is occupied, inflate around it
+            if (map.data[index] == 100)
+            {
+                for (int dy = -inflation_radius; dy <= inflation_radius; ++dy)
+                {
+                    for (int dx = -inflation_radius; dx <= inflation_radius; ++dx)
+                    {
+                        int nx = x + dx;
+                        int ny = y + dy;
+
+                        // Ensure the neighbor is within bounds
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                        {
+                            int neighbor_index = ny * width + nx;
+                            inflated_data[neighbor_index] = 100; // Mark as occupied
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Replace the original data with the inflated data
+    map.data = std::move(inflated_data);
+}
 
 void PGMMapLoader::loadPCDToMultiLayerGrid(const std::string &pcd_file, 
                                            std::vector<nav_msgs::msg::OccupancyGrid> &maps,
@@ -266,7 +304,7 @@ void PGMMapLoader::loadPCDToMultiLayerGrid(const std::string &pcd_file,
         map_.info.origin.orientation.w = 1.0;
 
         // Initialize the map_ data
-        map_.data.resize(grid_width * grid_height, -1); // -1 for unknown cells
+        map_.data.resize(grid_width * grid_height, 0); // -1 for unknown cells
     }
 
     // Process the point cloud and project onto 2D slices
@@ -294,20 +332,35 @@ void PGMMapLoader::loadPCDToMultiLayerGrid(const std::string &pcd_file,
             map_.data[index] = 100; // Mark cell as occupied
         }
     }
+    // Apply inflation to all slices
+    int inflation_radius = 3; // 4-pixel radius
+    for (auto &map_ : maps)
+    {
+        inflateMap(map_, inflation_radius);
+    }
 
     // Optionally, write each slice's data to a text file for verification
     for (int slice = 0; slice < num_slices; ++slice)
     {
         const nav_msgs::msg::OccupancyGrid &map_ = maps[slice];
-        std::ofstream slice_outfile("slice_map_" + std::to_string(slice) + ".txt");
+        std::ofstream slice_outfile("sliced/slice_map_" + std::to_string(slice) + ".txt");
         if (slice_outfile.is_open())
         {
             for (int y = 0; y < grid_height; ++y)
             {
                 for (int x = 0; x < grid_width; ++x)
                 {
+                    
                     int index = y * grid_width + x;
-                    slice_outfile << (map_.data[index] == 100 ? "1 " : "0 ");
+                    if (x == 0 && y == 0)
+                    {
+                        slice_outfile << "X "; // Mark the cell with an X
+                    }
+                    else
+                    {
+                        // Write occupancy data as 1 or 0
+                        slice_outfile << (map_.data[index] == 100 ? "1 " : "0 ");
+                    }
                 }
                 slice_outfile << "\n";
             }

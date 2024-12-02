@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.m": "matlab",
         "functional": "cpp",
         "__functional_03": "cpp",
         "target": "cpp",
@@ -81,7 +82,12 @@
         "strstream": "cpp",
         "future": "cpp",
         "shared_mutex": "cpp",
-        "cfenv": "cpp"
+        "cfenv": "cpp",
+        "__bit_reference": "cpp",
+        "__hash_table": "cpp",
+        "__string": "cpp",
+        "__node_handle": "cpp",
+        "ios": "cpp"
     },
     "cmake.sourceDirectory": "/home/laptop/school/lrs_project1/src/template_drone_control"
 }
