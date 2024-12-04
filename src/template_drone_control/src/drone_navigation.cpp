@@ -11,6 +11,8 @@
 #include <fstream>
 #include <string>
 #include <geometry_msgs/msg/pose.hpp>
+#include <unordered_set>
+
 int iteration = 0;
 struct Node
 {
@@ -134,6 +136,119 @@ std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding(
 
     return path;
 }
+std::vector<geometry_msgs::msg::PoseStamped> aStarPathfinding3D(
+    const std::vector<nav_msgs::msg::OccupancyGrid>& maps,
+    int start_x, int start_y, int start_z,
+    int goal_x, int goal_y, int goal_z,
+    double layer_resolution)
+{
+    struct Node
+    {
+        int x, y, z;
+        double cost;
+        std::shared_ptr<Node> parent;
+
+        Node(int x, int y, int z, double cost = 0.0, std::shared_ptr<Node> parent = nullptr)
+            : x(x), y(y), z(z), cost(cost), parent(parent) {}
+    };
+
+    struct CompareNode
+    {
+        bool operator()(const std::pair<double, std::shared_ptr<Node>>& a, const std::pair<double, std::shared_ptr<Node>>& b) const
+        {
+            return a.first > b.first; // Min-heap
+        }
+    };
+
+    auto encodeKey = [](int x, int y, int z) {
+        return std::to_string(x) + "_" + std::to_string(y) + "_" + std::to_string(z);
+    };
+
+    auto isValid3D = [&](int x, int y, int z) {
+        if (z < 0 || z >= maps.size()) return false;
+        int width = maps[z].info.width;
+        int height = maps[z].info.height;
+        if (x < 0 || x >= width || y < 0 || y >= height) return false;
+        int index = y * width + x;
+        return maps[z].data[index] == 0; // Free space
+    };
+
+    // Priority queue
+    std::priority_queue<
+        std::pair<double, std::shared_ptr<Node>>,
+        std::vector<std::pair<double, std::shared_ptr<Node>>>,
+        CompareNode
+    > open_list;
+
+    std::unordered_set<std::string> visited;
+
+    auto start_node = std::make_shared<Node>(start_x, start_y, start_z);
+    open_list.push({0.0, start_node});
+
+    std::shared_ptr<Node> goal_node = nullptr;
+
+    // A* Search
+    while (!open_list.empty())
+    {
+        auto current = open_list.top().second;
+        open_list.pop();
+
+        std::string key = encodeKey(current->x, current->y, current->z);
+        if (visited.find(key) != visited.end())
+            continue;
+        visited.insert(key);
+
+        // Check if we've reached the goal
+        if (current->x == goal_x && current->y == goal_y && current->z == goal_z)
+        {
+            goal_node = current;
+            break;
+        }
+
+        // Explore neighbors in 3D (4 horizontal + 2 vertical directions)
+        std::vector<std::tuple<int, int, int>> directions = {
+            {0, 1, 0}, {1, 0, 0}, {0, -1, 0}, {-1, 0, 0}, // Horizontal
+            {0, 0, 1}, {0, 0, -1}                        // Vertical
+        };
+
+        for (auto& dir : directions)
+        {
+            int new_x = current->x + std::get<0>(dir);
+            int new_y = current->y + std::get<1>(dir);
+            int new_z = current->z + std::get<2>(dir);
+
+            if (isValid3D(new_x, new_y, new_z))
+            {
+                double new_cost = current->cost + (std::get<2>(dir) == 0 ? 1.0 : layer_resolution);
+                auto neighbor = std::make_shared<Node>(new_x, new_y, new_z, new_cost, current);
+                double priority = new_cost + heuristic(new_x, new_y, goal_x, goal_y) + std::abs(new_z - goal_z);
+                open_list.push({priority, neighbor});
+            }
+        }
+    }
+
+    // Reconstruct the path
+    std::vector<geometry_msgs::msg::PoseStamped> path;
+    if (goal_node != nullptr)
+    {
+        for (auto n = goal_node; n != nullptr; n = n->parent)
+        {
+            geometry_msgs::msg::PoseStamped pose;
+            pose.pose.position.x = n->x * maps[0].info.resolution + maps[0].info.origin.position.x;
+            pose.pose.position.y = n->y * maps[0].info.resolution + maps[0].info.origin.position.y;
+            pose.pose.position.z = n->z * layer_resolution;
+            path.push_back(pose);
+        }
+        std::reverse(path.begin(), path.end());
+    }
+    else
+    {
+        std::cout << "No path found." << std::endl;
+    }
+
+    return path;
+}
+
 #include <fstream>
 #include <string>
 #include <vector>
@@ -266,6 +381,33 @@ nav_msgs::msg::Path generatePath(
     }
     
     path_points = optimized_path;
+    nav_msgs::msg::Path path;
+    path.header.frame_id = "map";
+    path.header.stamp = rclcpp::Time();
+    path.poses = path_points;
+
+    return path;
+}
+nav_msgs::msg::Path generatePath3D(
+    const std::vector<nav_msgs::msg::OccupancyGrid>& maps, 
+    const geometry_msgs::msg::Pose& start, 
+    const geometry_msgs::msg::Pose& goal,
+    const double resolution)
+{
+    // Convert start and goal positions to grid coordinates
+    int start_layer = static_cast<int>(start.position.z / resolution);
+    int goal_layer = static_cast<int>(goal.position.z / resolution);
+
+    int start_x = static_cast<int>((start.position.x - maps[0].info.origin.position.x) / maps[0].info.resolution);
+    int start_y = static_cast<int>((start.position.y - maps[0].info.origin.position.y) / maps[0].info.resolution);
+
+    int goal_x = static_cast<int>((goal.position.x - maps[0].info.origin.position.x) / maps[0].info.resolution);
+    int goal_y = static_cast<int>((goal.position.y - maps[0].info.origin.position.y) / maps[0].info.resolution);
+
+    // Call 3D A* pathfinding
+    std::vector<geometry_msgs::msg::PoseStamped> path_points = aStarPathfinding3D(
+        maps, start_x, start_y, start_layer, goal_x, goal_y, goal_layer, resolution);
+
     nav_msgs::msg::Path path;
     path.header.frame_id = "map";
     path.header.stamp = rclcpp::Time();

@@ -21,11 +21,14 @@ public:
     std::vector<std::string> generateMapFilenames();
     std::vector<Waypoint> loadWaypoints(const std::string &filename);
     nav_msgs::msg::OccupancyGrid getOccupancyGrid() { return map; }
+    std::vector<nav_msgs::msg::OccupancyGrid> getOccupancyGrids() { return maps; }
     void fromPCD(double altitude);
+    double get_resolution(){ return resolution;}
     void saveSliceWithMarker(const nav_msgs::msg::OccupancyGrid &map, const std::string &filename, double marker_x, double marker_y);
 private:
     int slices_;
     double max_height_;
+    double resolution;
     nav_msgs::msg::OccupancyGrid map;
     std::vector<nav_msgs::msg::OccupancyGrid> maps;
     void loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map);

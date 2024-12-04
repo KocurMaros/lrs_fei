@@ -102,7 +102,7 @@ public:
             }else if(waypoint.task == "land"){
             }else if(waypoint.task == "landtakeoff"){
             }else{
-                change_altitude(goal_pose.position.z);
+                // change_altitude(goal_pose.position.z);
             }
 
             if (waypoint.precision == "hard") {
@@ -119,15 +119,16 @@ public:
             drone_position.position.z = current_local_pos_.pose.position.z;
 
             // Use your path generator
-            map_loader.fromPCD(goal_pose.position.z);
-           
-            nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
+            // map_loader.fromPCD(goal_pose.position.z);
+            std::vector<nav_msgs::msg::OccupancyGrid> maps = map_loader.getOccupancyGrids();
+            // nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
             RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
             RCLCPP_INFO(this->get_logger(), "Goal Pose: %f, %f, %f",
                         goal_pose.position.x, goal_pose.position.y, goal_pose.position.z);
         
-            nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            // nav_msgs::msg::Path path = generatePath(map, drone_position, goal_pose);
+            nav_msgs::msg::Path path = generatePath3D(maps, drone_position, goal_pose, map_loader.get_resolution());
 
             for(auto pose_stamped : path.poses){
                 // double temp = pose_stamped.pose.position.x;
@@ -136,11 +137,11 @@ public:
                 pose_stamped.pose.position.x -= drone_offset_x;
                 pose_stamped.pose.position.y -= drone_offset_y;
                 
-                RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
+                // RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
                 if (&pose_stamped == &path.poses.back()) {
-                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, waypoint.z, precision);
+                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z, precision);
                 } else {
-                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, waypoint.z, 0.20);
+                    go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z, 0.20);
                 }
             }
             // TODO change land takeoff to set_mode("LAND") and set_mode("GUIDED")
@@ -251,15 +252,15 @@ private:
         rclcpp::Rate rate(10); // 10 Hz
         while (rclcpp::ok()) {
             local_pos_pub_->publish(target_pose);
-            RCLCPP_INFO(this->get_logger(), "Current pos: %f %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y);
-            RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
-            RCLCPP_INFO(this->get_logger(), "To target point: x=%f, y=%f", current_local_pos_.pose.position.y - x, current_local_pos_.pose.position.x + y);
-            RCLCPP_INFO(this->get_logger(), "---------------------------");
+            // RCLCPP_INFO(this->get_logger(), "Current pos: %f %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y);
+            // RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
+            // RCLCPP_INFO(this->get_logger(), "To target point: x=%f, y=%f", current_local_pos_.pose.position.y - x, current_local_pos_.pose.position.x + y);
+            // RCLCPP_INFO(this->get_logger(), "---------------------------");
             
             if (std::abs(current_local_pos_.pose.position.y - x) <= tolerance &&
                 std::abs(current_local_pos_.pose.position.x + y) <= tolerance &&
                 std::abs(current_local_pos_.pose.position.z - z) <= tolerance) {
-                RCLCPP_INFO(this->get_logger(), "Arrived at target point.");
+                // RCLCPP_INFO(this->get_logger(), "Arrived at target point.");
                 break;
             }
             rate.sleep();

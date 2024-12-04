@@ -34,10 +34,8 @@ void PGMMapLoader::loadMapPCD(const std::string &pcd_file, int slices)
 void PGMMapLoader::fromPCD(double altitude){
     double slice_thickness = max_height_ / slices_;
     int slice_index = static_cast<int>(std::floor(altitude / slice_thickness));
-    // Clamp slice index to valid range [0, num_slices - 1]
     slice_index = std::max(0, std::min(slice_index, slices_ - 1));
-    // std::cout << "Slice index: " << slice_index << "\n";
-    map = maps[6];
+    map = maps[slice_index];
     map_publisher_->publish(map);
 }
 void PGMMapLoader::loadPGM(const std::string &pgm_file, nav_msgs::msg::OccupancyGrid &map)
@@ -283,6 +281,7 @@ void PGMMapLoader::loadPCDToMultiLayerGrid(const std::string &pcd_file,
     double map_width = x_max - x_min;
     double map_height = y_max - y_min;
     double slice_thickness = (z_max - z_min) / num_slices;
+    // resolution = slice_thickness;
 
     // Calculate the number of cells in the grid
     int grid_width = static_cast<int>(std::ceil(map_width / resolution));

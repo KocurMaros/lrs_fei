@@ -10,4 +10,9 @@ nav_msgs::msg::Path generatePath(const nav_msgs::msg::OccupancyGrid& map,
                                  const geometry_msgs::msg::Pose& start, 
                                  const geometry_msgs::msg::Pose& goal);
 
+nav_msgs::msg::Path generatePath3D(
+            const std::vector<nav_msgs::msg::OccupancyGrid>& maps, 
+            const geometry_msgs::msg::Pose& start, 
+            const geometry_msgs::msg::Pose& goal,
+            const double resolution);
 #endif // DRONE_NAVIGATION_HPP
