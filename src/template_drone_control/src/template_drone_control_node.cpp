@@ -63,13 +63,6 @@ public:
         set_mode("GUIDED");
         set_arm();
         std::this_thread::sleep_for(500ms);
-        // takeoff(2.0);
-        // go_to_point(0.0, 6.0, 2.0, 0.2);
-        // go_to_point(-2.0, 6.0, 2.0, 0.2);
-        // std::this_thread::sleep_for(10000ms);
-        // go_to_point(0.0, 0.0, 2.0, 0.2);
-        // set_mode("LAND");
-        // return;
         double precision = 0.1;
 
         std::string key = "yaw";
@@ -121,7 +114,9 @@ public:
             // Use your path generator
             // map_loader.fromPCD(goal_pose.position.z);
             std::vector<nav_msgs::msg::OccupancyGrid> maps = map_loader.getOccupancyGrids();
+
             // nav_msgs::msg::OccupancyGrid map = map_loader.getOccupancyGrid();
+            
             RCLCPP_INFO(this->get_logger(), "Current Local Position: %f, %f, %f",
                         current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
             RCLCPP_INFO(this->get_logger(), "Goal Pose: %f, %f, %f",
@@ -131,12 +126,8 @@ public:
             nav_msgs::msg::Path path = generatePath3D(maps, drone_position, goal_pose, map_loader.get_resolution());
 
             for(auto pose_stamped : path.poses){
-                // double temp = pose_stamped.pose.position.x;
-                // pose_stamped.pose.position.x = pose_stamped.pose.position.y*(-1.0) - drone_offset_x;
-                // pose_stamped.pose.position.y = temp - drone_offset_y;
                 pose_stamped.pose.position.x -= drone_offset_x;
-                pose_stamped.pose.position.y -= drone_offset_y;
-                
+                pose_stamped.pose.position.y -= drone_offset_y;   
                 // RCLCPP_INFO(this->get_logger(), "Next point: %f, %f, %f", pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z);
                 if (&pose_stamped == &path.poses.back()) {
                     go_to_point(pose_stamped.pose.position.x, pose_stamped.pose.position.y, pose_stamped.pose.position.z, precision);
@@ -245,6 +236,7 @@ private:
         geometry_msgs::msg::PoseStamped target_pose;
         target_pose.pose.position.x = y*(-1.0);
         target_pose.pose.position.y = x;
+        change_altitude(z);
         target_pose.pose.position.z = z;
         target_pose.pose.orientation = current_local_pos_.pose.orientation;
 
@@ -252,15 +244,15 @@ private:
         rclcpp::Rate rate(10); // 10 Hz
         while (rclcpp::ok()) {
             local_pos_pub_->publish(target_pose);
-            // RCLCPP_INFO(this->get_logger(), "Current pos: %f %f", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y);
-            // RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
-            // RCLCPP_INFO(this->get_logger(), "To target point: x=%f, y=%f", current_local_pos_.pose.position.y - x, current_local_pos_.pose.position.x + y);
-            // RCLCPP_INFO(this->get_logger(), "---------------------------");
+            RCLCPP_INFO(this->get_logger(), "Current pos: %f %f %f ", current_local_pos_.pose.position.x, current_local_pos_.pose.position.y, current_local_pos_.pose.position.z);
+            RCLCPP_INFO(this->get_logger(), "Moving to point: x=%f, y=%f, z=%f", x, y, z);
+            RCLCPP_INFO(this->get_logger(), "To target point: x=%f, y=%f", current_local_pos_.pose.position.y - x, current_local_pos_.pose.position.x + y);
+            RCLCPP_INFO(this->get_logger(), "---------------------------");
             
             if (std::abs(current_local_pos_.pose.position.y - x) <= tolerance &&
                 std::abs(current_local_pos_.pose.position.x + y) <= tolerance &&
                 std::abs(current_local_pos_.pose.position.z - z) <= tolerance) {
-                // RCLCPP_INFO(this->get_logger(), "Arrived at target point.");
+                RCLCPP_INFO(this->get_logger(), "Arrived at target point.");
                 break;
             }
             rate.sleep();
@@ -334,8 +326,6 @@ private:
         target_pose.pose.position.y = current_local_pos_.pose.position.y;
         target_pose.pose.position.z = altitude;
         target_pose.pose.orientation = current_local_pos_.pose.orientation;
-
-        RCLCPP_INFO(this->get_logger(), "Changing altitude to: z=%f", target_pose.pose.position.z);
 
         rclcpp::Rate rate(10); // 10 Hz
         auto start_time = this->get_clock()->now();

@@ -411,6 +411,42 @@ nav_msgs::msg::Path generatePath3D(
     nav_msgs::msg::Path path;
     path.header.frame_id = "map";
     path.header.stamp = rclcpp::Time();
+    std::vector<geometry_msgs::msg::PoseStamped> optimized_path;
+    if (!path_points.empty())
+    {
+        optimized_path.push_back(path_points.front()); // Start point
+        const double tolerance = 0.3; // Adjust this threshold based on acceptable offset tolerance
+
+        for (size_t i = 1; i < path_points.size() - 1; ++i)
+        {
+            auto& prev = path_points[i - 1].pose.position;
+            auto& curr = path_points[i].pose.position;
+            auto& next = path_points[i + 1].pose.position;
+
+            double dx1 = curr.x - prev.x;
+            double dy1 = curr.y - prev.y;
+            double dx2 = next.x - curr.x;
+            double dy2 = next.y - curr.y;
+
+            
+            // Check if the movement is approximately straight or diagonal
+            bool is_approx_straight = !(dx1 * dy2 != dy1 * dx2);
+
+            bool is_approx_diagonal = (std::abs(dx1) > tolerance && std::abs(dy1) > tolerance) &&
+                                      (std::abs(dx1 - dx2) <= tolerance && std::abs(dy1 - dy2) <= tolerance);
+
+            // Keep points only if there's a change in movement type
+            if ((!is_approx_diagonal && !is_approx_straight) || 
+                (is_approx_straight && (dx1 * dx2 < 0 || dy1 * dy2 < 0))) // Change in direction
+            {
+                optimized_path.push_back(path_points[i]);
+            }
+        }
+
+        optimized_path.push_back(path_points.back()); // Goal point
+    }
+    
+    path_points = optimized_path;
     path.poses = path_points;
 
     return path;
